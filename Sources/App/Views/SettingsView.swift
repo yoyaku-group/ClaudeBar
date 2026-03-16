@@ -1175,7 +1175,7 @@ struct ThemeOptionButton: View {
 
                     Image(systemName: mode.icon)
                         .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(mode == .cli ? Color.black : .white)
+                        .foregroundStyle(mode == .cli ? Color.black : (mode == .yoyaku ? Color.black : .white))
                 }
 
                 VStack(alignment: .leading, spacing: 1) {
@@ -1191,6 +1191,10 @@ struct ThemeOptionButton: View {
                         Text("Terminal")
                             .font(.system(size: 8, weight: .medium, design: .monospaced))
                             .foregroundStyle(CLITheme().accentPrimary)
+                    } else if mode == .yoyaku {
+                        Text("Vinyl")
+                            .font(.system(size: 8, weight: .medium, design: .monospaced))
+                            .foregroundStyle(YoyakuTheme().accentPrimary)
                     }
                 }
 
@@ -1228,6 +1232,8 @@ struct ThemeOptionButton: View {
             return LinearGradient(colors: [Color.gray, Color.secondary], startPoint: .topLeading, endPoint: .bottomTrailing)
         case .cli:
             return CLITheme().accentGradient
+        case .yoyaku:
+            return YoyakuTheme().accentGradient
         case .christmas:
             return ChristmasTheme().accentGradient
         }

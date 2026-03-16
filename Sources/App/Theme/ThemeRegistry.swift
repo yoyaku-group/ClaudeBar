@@ -38,6 +38,7 @@ public final class ThemeRegistry {
         register(DarkTheme())
         register(SystemTheme())
         register(CLITheme())
+        register(YoyakuTheme())
         register(ChristmasTheme())
     }
 

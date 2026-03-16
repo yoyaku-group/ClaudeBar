@@ -53,7 +53,7 @@ public struct AppThemeProviderModifier: ViewModifier {
         let mode = ThemeMode(rawValue: themeModeId)
         switch mode {
         case .light: return .light
-        case .dark, .cli, .christmas: return .dark
+        case .dark, .cli, .yoyaku, .christmas: return .dark
         case .system, .none: return systemColorScheme
         }
     }
