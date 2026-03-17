@@ -86,9 +86,9 @@ public struct YoyakuTheme: AppThemeProvider {
     // MARK: - Status Colors
 
     public var statusHealthy: Color { Self.cyan }
-    public var statusWarning: Color { Self.yellow }
+    public var statusWarning: Color { Self.blue }
     public var statusCritical: Color { Self.red }
-    public var statusDepleted: Color { Self.magenta }
+    public var statusDepleted: Color { Self.red.opacity(0.6) }
 
     // MARK: - Accents
 
@@ -113,7 +113,7 @@ public struct YoyakuTheme: AppThemeProvider {
 
     public var shareGradient: LinearGradient {
         LinearGradient(
-            colors: [Self.yellow, Self.yellow.opacity(0.7)],
+            colors: [Self.blue, Self.blue.opacity(0.7)],
             startPoint: .leading,
             endPoint: .trailing
         )
