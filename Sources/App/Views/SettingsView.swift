@@ -1191,10 +1191,6 @@ struct ThemeOptionButton: View {
                         Text("Terminal")
                             .font(.system(size: 8, weight: .medium, design: .monospaced))
                             .foregroundStyle(CLITheme().accentPrimary)
-                    } else if mode == .yoyaku {
-                        Text("Vinyl")
-                            .font(.system(size: 8, weight: .medium, design: .monospaced))
-                            .foregroundStyle(YoyakuTheme().accentPrimary)
                     }
                 }
 

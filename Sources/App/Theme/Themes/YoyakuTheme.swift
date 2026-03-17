@@ -1,18 +1,18 @@
 import SwiftUI
 
-// MARK: - YOYAKU Theme
+// MARK: - iTerm Theme
 
-/// Dark theme inspired by YOYAKU's iTerm2 setup.
+/// Dark theme matching the user's iTerm2 terminal aesthetic.
 /// Background: #1D252B, Cyan accent: #5DF1D1, Monospaced font.
-/// Designed to match Benjamin's terminal aesthetic.
+/// Pairs with Claude Code for a unified terminal experience.
 public struct YoyakuTheme: AppThemeProvider {
     // MARK: - Identity
 
     public let id = "yoyaku"
-    public let displayName = "YOYAKU"
-    public let icon = "music.note"
-    public let subtitle: String? = "Vinyl"
-    public let statusBarIconName: String? = "music.note"
+    public let displayName = "iTerm"
+    public let icon = "brain.fill"
+    public let subtitle: String? = nil
+    public let statusBarIconName: String? = "brain.fill"
 
     // MARK: - YOYAKU Color Palette (from iTerm2)
 
