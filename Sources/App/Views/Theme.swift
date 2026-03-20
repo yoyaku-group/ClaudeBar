@@ -18,7 +18,7 @@ enum ThemeMode: String, CaseIterable {
         case .dark: "Dark"
         case .system: "System"
         case .cli: "CLI"
-        case .yoyaku: "iTerm"
+        case .yoyaku: "Yoyaku"
         case .christmas: "Christmas"
         }
     }
