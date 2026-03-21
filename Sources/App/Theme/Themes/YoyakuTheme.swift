@@ -12,6 +12,7 @@ public struct YoyakuTheme: AppThemeProvider {
     public let displayName = "Yoyaku"
     public let icon = "brain.fill"
     public let subtitle: String? = "Terminal"
+    public let statusBarIconName: String? = "brain.fill"
 
     // MARK: - YOYAKU Color Palette (extracted from iTerm2 profile)
 
