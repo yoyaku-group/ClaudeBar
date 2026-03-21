@@ -31,9 +31,9 @@
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
     <key>SUFeedURL</key>
-    <string>https://tddworks.github.io/ClaudeBar/appcast.xml</string>
+    <string>https://benjaminbelaga.github.io/ClaudeBar/appcast.xml</string>
     <key>SUPublicEDKey</key>
-    <string>2Kn6vvvrrNqgAWrzOiq5Ae+abMjEqlu2MOOM/YBlsw0=</string>
+    <string>uMWIyib/6Sa4FZiyL3c5eyz7JmiJw4Tfa1DVnNTCob0=</string>
     <key>SUEnableAutomaticChecks</key>
     <true/>
     <key>SUAutomaticallyUpdate</key>
