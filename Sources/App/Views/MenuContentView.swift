@@ -263,7 +263,7 @@ struct MenuContentView: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {
                     Text("ClaudeBar")
-                        .font(.system(size: 18, weight: .bold, design: theme.fontDesign))
+                        .font(theme.font(size: 18, weight: .bold))
                         .foregroundStyle(theme.textPrimary)
 
                     // Christmas gift icon
@@ -275,7 +275,7 @@ struct MenuContentView: View {
                 }
 
                 Text(headerSubtitle)
-                    .font(.system(size: 11, weight: .medium, design: theme.fontDesign))
+                    .font(theme.font(size: 11, weight: .medium))
                     .foregroundStyle(theme.id == "cli" ? theme.accentPrimary : theme.textSecondary)
             }
 
@@ -321,7 +321,7 @@ struct MenuContentView: View {
             )
 
             Text(statusText)
-                .font(.system(size: 11, weight: .medium, design: theme.fontDesign))
+                .font(theme.font(size: 11, weight: .medium))
                 .foregroundStyle(theme.textPrimary)
         }
         .padding(.horizontal, 12)
@@ -449,7 +449,7 @@ struct MenuContentView: View {
             ProviderIconView(providerId: provider.id, size: 20, showGlow: false)
 
             Text(provider.name)
-                .font(.system(size: 13, weight: .semibold, design: theme.fontDesign))
+                .font(theme.font(size: 13, weight: .semibold))
                 .foregroundStyle(theme.textPrimary)
 
             Spacer()
@@ -468,7 +468,7 @@ struct MenuContentView: View {
                 .foregroundStyle(theme.statusWarning)
 
             Text(provider.lastError?.localizedDescription ?? "Unavailable")
-                .font(.system(size: 11, weight: .medium, design: theme.fontDesign))
+                .font(theme.font(size: 11, weight: .medium))
                 .foregroundStyle(theme.textTertiary)
                 .lineLimit(1)
 
@@ -487,21 +487,21 @@ struct MenuContentView: View {
                     .frame(width: 32, height: 32)
 
                 Text(String(displayName.prefix(1)).uppercased())
-                    .font(.system(size: 14, weight: .bold, design: theme.fontDesign))
+                    .font(theme.font(size: 14, weight: .bold))
                     .foregroundStyle(.white)
             }
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(displayName)
-                        .font(.system(size: 12, weight: .medium, design: theme.fontDesign))
+                        .font(theme.font(size: 12, weight: .medium))
                         .foregroundStyle(theme.textPrimary)
                         .lineLimit(1)
 
                     // Account tier badge
                     if let accountTier = snapshot.accountTier {
                         Text(accountTier.badgeText)
-                            .font(.system(size: 8, weight: .semibold, design: theme.fontDesign))
+                            .font(theme.font(size: 8, weight: .semibold))
                             .foregroundStyle(.white)
                             .padding(.horizontal, 5)
                             .padding(.vertical, 2)
@@ -513,7 +513,7 @@ struct MenuContentView: View {
                 }
 
                 Text("Updated \(snapshot.ageDescription)")
-                    .font(.system(size: 10, weight: .semibold, design: theme.fontDesign))
+                    .font(theme.font(size: 10, weight: .semibold))
                     .foregroundStyle(theme.textTertiary)
             }
 
@@ -595,12 +595,12 @@ struct MenuContentView: View {
             }
 
             Text("\(selectedProvider?.name ?? selectedProviderId) Unavailable")
-                .font(.system(size: 14, weight: .bold, design: theme.fontDesign))
+                .font(theme.font(size: 14, weight: .bold))
                 .foregroundStyle(theme.textPrimary)
 
             // Show actual error message if available, otherwise generic message
             Text(selectedProvider?.lastError?.localizedDescription ?? "Install CLI or check configuration")
-                .font(.system(size: 11, weight: .semibold, design: theme.fontDesign))
+                .font(theme.font(size: 11, weight: .semibold))
                 .foregroundStyle(theme.textTertiary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 16)
@@ -796,7 +796,7 @@ struct ProviderPill: View {
                     .font(.system(size: 10, weight: .semibold))
 
                 Text(providerName)
-                    .font(.system(size: 11, weight: .medium, design: theme.fontDesign))
+                    .font(theme.font(size: 11, weight: .medium))
                     .lineLimit(1)
                     .fixedSize()
             }
@@ -871,7 +871,7 @@ struct WrappedStatCard: View {
                         .foregroundStyle(statusColor)
 
                     Text(quota.quotaType.displayName.uppercased())
-                        .font(.system(size: 8, weight: .medium, design: theme.fontDesign))
+                        .font(theme.font(size: 8, weight: .medium))
                         .foregroundStyle(theme.textSecondary)
                         .tracking(0.3)
                 }
@@ -892,18 +892,18 @@ struct WrappedStatCard: View {
             HStack(alignment: .firstTextBaseline) {
                 if let dollarText = quota.formattedDollarRemaining {
                     Text(dollarText)
-                        .font(.system(size: 18, weight: .bold, design: theme.fontDesign))
+                        .font(theme.font(size: 18, weight: .bold))
                         .foregroundStyle(theme.textPrimary)
                         .contentTransition(.numericText())
                 } else {
                     HStack(alignment: .firstTextBaseline, spacing: 1) {
                         Text("\(Int(quota.displayPercent(mode: effectiveDisplayMode)))")
-                            .font(.system(size: 32, weight: .bold, design: theme.fontDesign))
+                            .font(theme.font(size: 32, weight: .bold))
                             .foregroundStyle(effectiveDisplayMode == .pace ? paceColor : theme.textPrimary)
                             .contentTransition(.numericText())
 
                         Text("%")
-                            .font(.system(size: 16, weight: .medium, design: theme.fontDesign))
+                            .font(theme.font(size: 16, weight: .medium))
                             .foregroundStyle(effectiveDisplayMode == .pace ? paceColor.opacity(0.7) : theme.textTertiary)
                     }
                 }
@@ -911,7 +911,7 @@ struct WrappedStatCard: View {
                 Spacer()
 
                 Text(quota.isDollarBased ? "Remaining" : effectiveDisplayMode.displayLabel)
-                    .font(.system(size: 12, weight: .medium, design: theme.fontDesign))
+                    .font(theme.font(size: 12, weight: .medium))
                     .foregroundStyle(effectiveDisplayMode == .pace ? paceColor.opacity(0.8) : theme.textTertiary)
             }
 
@@ -921,7 +921,7 @@ struct WrappedStatCard: View {
                     Image(systemName: "lightbulb.fill")
                         .font(.system(size: 7))
                     Text(insight)
-                        .font(.system(size: 8, weight: .medium, design: theme.fontDesign))
+                        .font(theme.font(size: 8, weight: .medium))
                 }
                 .foregroundStyle(paceColor.opacity(0.8))
                 .lineLimit(1)
@@ -970,7 +970,7 @@ struct WrappedStatCard: View {
                         .font(.system(size: 7))
 
                     Text(resetText)
-                        .font(.system(size: 8, weight: .medium, design: theme.fontDesign))
+                        .font(theme.font(size: 8, weight: .medium))
                 }
                 .foregroundStyle(theme.textTertiary)
                 .lineLimit(1)
@@ -1032,7 +1032,7 @@ struct LoadingSpinnerView: View {
             }
 
             Text("Fetching usage data...")
-                .font(.system(size: 13, weight: .medium, design: theme.fontDesign))
+                .font(theme.font(size: 13, weight: .medium))
                 .foregroundStyle(theme.textSecondary)
         }
         .frame(height: 140)
@@ -1070,7 +1070,7 @@ struct WrappedActionButton: View {
                 }
 
                 Text(label)
-                    .font(.system(size: 12, weight: .medium, design: theme.fontDesign))
+                    .font(theme.font(size: 12, weight: .medium))
                     .fixedSize()
             }
             .foregroundStyle(isHovering ? .white : theme.textPrimary)
@@ -1325,14 +1325,14 @@ struct BedrockUsageCard: View {
                             .foregroundStyle(ProviderVisualIdentityLookup.color(for: "bedrock", scheme: colorScheme))
 
                         Text("TODAY'S USAGE")
-                            .font(.system(size: 9, weight: .semibold, design: theme.fontDesign))
+                            .font(theme.font(size: 9, weight: .semibold))
                             .foregroundStyle(theme.textSecondary)
                             .tracking(0.5)
                     }
 
                     // Large cost number
                     Text(usage.formattedTotalCost)
-                        .font(.system(size: 36, weight: .bold, design: theme.fontDesign))
+                        .font(theme.font(size: 36, weight: .bold))
                         .foregroundStyle(theme.textPrimary)
                         .contentTransition(.numericText())
                 }
@@ -1355,14 +1355,14 @@ struct BedrockUsageCard: View {
                     ForEach(usage.modelsBySpend.prefix(3), id: \.model.id) { modelUsage in
                         HStack {
                             Text(modelUsage.model.displayName)
-                                .font(.system(size: 11, weight: .medium, design: theme.fontDesign))
+                                .font(theme.font(size: 11, weight: .medium))
                                 .foregroundStyle(theme.textSecondary)
                                 .lineLimit(1)
 
                             Spacer()
 
                             Text(modelUsage.formattedCost)
-                                .font(.system(size: 11, weight: .semibold, design: theme.fontDesign))
+                                .font(theme.font(size: 11, weight: .semibold))
                                 .foregroundStyle(theme.textPrimary)
                         }
                     }
@@ -1370,7 +1370,7 @@ struct BedrockUsageCard: View {
                     // Show "and X more" if more than 3 models
                     if usage.modelUsages.count > 3 {
                         Text("and \(usage.modelUsages.count - 3) more...")
-                            .font(.system(size: 10, weight: .medium, design: theme.fontDesign))
+                            .font(theme.font(size: 10, weight: .medium))
                             .foregroundStyle(theme.textTertiary)
                     }
                 }
@@ -1385,13 +1385,13 @@ struct BedrockUsageCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
                         Text("Daily Budget")
-                            .font(.system(size: 10, weight: .medium, design: theme.fontDesign))
+                            .font(theme.font(size: 10, weight: .medium))
                             .foregroundStyle(theme.textSecondary)
 
                         Spacer()
 
                         Text("\(Int(min(budgetPercent, 100)))% of \(budgetFormatted)")
-                            .font(.system(size: 10, weight: .semibold, design: theme.fontDesign))
+                            .font(theme.font(size: 10, weight: .semibold))
                             .foregroundStyle(budgetPercent > 90 ? theme.statusCritical : theme.textPrimary)
                     }
 
@@ -1415,7 +1415,7 @@ struct BedrockUsageCard: View {
                     .font(.system(size: 8))
 
                 Text("Since \(formattedPeriodStart)")
-                    .font(.system(size: 9, weight: .medium, design: theme.fontDesign))
+                    .font(theme.font(size: 9, weight: .medium))
             }
             .foregroundStyle(theme.textTertiary)
         }
@@ -1466,11 +1466,11 @@ private struct StatPill: View {
                 .foregroundStyle(theme.textTertiary)
 
             Text(value)
-                .font(.system(size: 11, weight: .semibold, design: theme.fontDesign))
+                .font(theme.font(size: 11, weight: .semibold))
                 .foregroundStyle(theme.textPrimary)
 
             Text(label)
-                .font(.system(size: 9, weight: .medium, design: theme.fontDesign))
+                .font(theme.font(size: 9, weight: .medium))
                 .foregroundStyle(theme.textTertiary)
         }
         .padding(.horizontal, 8)

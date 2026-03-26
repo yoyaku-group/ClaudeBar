@@ -46,7 +46,7 @@ struct CostStatCard: View {
                         .foregroundStyle(budgetStatusColor)
 
                     Text("API COST")
-                        .font(.system(size: 8, weight: .semibold, design: theme.fontDesign))
+                        .font(theme.font(size: 8, weight: .semibold))
                         .foregroundStyle(theme.textSecondary)
                         .tracking(0.3)
                 }
@@ -63,7 +63,7 @@ struct CostStatCard: View {
             // Large cost display
             HStack(alignment: .firstTextBaseline, spacing: 2) {
                 Text(costUsage.formattedCost)
-                    .font(.system(size: 28, weight: .heavy, design: theme.fontDesign))
+                    .font(theme.font(size: 28, weight: .heavy))
                     .foregroundStyle(theme.textPrimary)
                     .contentTransition(.numericText())
             }
@@ -80,7 +80,7 @@ struct CostStatCard: View {
                         .font(.system(size: 7))
 
                     Text("API Time: \(costUsage.formattedApiDuration)")
-                        .font(.system(size: 9, weight: .semibold, design: theme.fontDesign))
+                        .font(theme.font(size: 9, weight: .semibold))
                 }
                 .foregroundStyle(theme.textTertiary)
                 .lineLimit(1)
@@ -90,7 +90,7 @@ struct CostStatCard: View {
                         .font(.system(size: 7))
 
                     Text(resetText)
-                        .font(.system(size: 9, weight: .semibold, design: theme.fontDesign))
+                        .font(theme.font(size: 9, weight: .semibold))
                 }
                 .foregroundStyle(theme.textTertiary)
                 .lineLimit(1)
@@ -145,7 +145,7 @@ struct CostStatCard: View {
             // Budget label
             HStack {
                 Text("\(Int(budgetPercentUsed))% of \(formatBudget(budget)) budget")
-                    .font(.system(size: 8, weight: .semibold, design: theme.fontDesign))
+                    .font(theme.font(size: 8, weight: .semibold))
                     .foregroundStyle(theme.textTertiary)
 
                 Spacer()

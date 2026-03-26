@@ -12,6 +12,8 @@ public struct YoyakuTheme: AppThemeProvider {
     public let displayName = "Yoyaku"
     public let icon = "brain.fill"
     public let subtitle: String? = "Terminal"
+    public let statusBarIconName: String? = "brain.fill"
+    public var customFontName: String? { "IBMPlexMono" }
 
     // MARK: - iTerm2 Color Palette (exact values from plist)
 
@@ -84,7 +86,7 @@ public struct YoyakuTheme: AppThemeProvider {
 
     public var accentGradient: LinearGradient {
         LinearGradient(
-            colors: [Self.cyan, Self.cyanDim],
+            colors: [Self.cyan, Self.blue],
             startPoint: .leading,
             endPoint: .trailing
         )
@@ -94,7 +96,7 @@ public struct YoyakuTheme: AppThemeProvider {
         LinearGradient(
             colors: [
                 Self.cyan.opacity(0.25),
-                Self.cyan.opacity(0.15)
+                Self.blue.opacity(0.15)
             ],
             startPoint: .topLeading,
             endPoint: .bottomTrailing

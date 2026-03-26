@@ -71,11 +71,11 @@ struct KimiConfigCard: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("Kimi Configuration")
-                    .font(.system(size: 14, weight: .bold, design: theme.fontDesign))
+                    .font(theme.font(size: 14, weight: .bold))
                     .foregroundStyle(theme.textPrimary)
 
                 Text("Data fetching method")
-                    .font(.system(size: 10, weight: .medium, design: theme.fontDesign))
+                    .font(theme.font(size: 10, weight: .medium))
                     .foregroundStyle(theme.textTertiary)
             }
 
@@ -87,7 +87,7 @@ struct KimiConfigCard: View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 6) {
                 Text("PROBE MODE")
-                    .font(.system(size: 9, weight: .semibold, design: theme.fontDesign))
+                    .font(theme.font(size: 9, weight: .semibold))
                     .foregroundStyle(theme.textSecondary)
                     .tracking(0.5)
 
@@ -114,11 +114,11 @@ struct KimiConfigCard: View {
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text("CLI Mode")
-                            .font(.system(size: 10, weight: .semibold, design: theme.fontDesign))
+                            .font(theme.font(size: 10, weight: .semibold))
                             .foregroundStyle(kimiProbeMode == .cli ? theme.textPrimary : theme.textSecondary)
 
                         Text("Uses kimi CLI with /usage command. Requires kimi installed.")
-                            .font(.system(size: 9, weight: .medium, design: theme.fontDesign))
+                            .font(theme.font(size: 9, weight: .medium))
                             .foregroundStyle(theme.textTertiary)
                     }
                 }
@@ -131,11 +131,11 @@ struct KimiConfigCard: View {
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text("API Mode")
-                            .font(.system(size: 10, weight: .semibold, design: theme.fontDesign))
+                            .font(theme.font(size: 10, weight: .semibold))
                             .foregroundStyle(kimiProbeMode == .api ? theme.textPrimary : theme.textSecondary)
 
                         Text("Calls Kimi API directly. Uses browser cookie authentication.")
-                            .font(.system(size: 9, weight: .medium, design: theme.fontDesign))
+                            .font(theme.font(size: 9, weight: .medium))
                             .foregroundStyle(theme.textTertiary)
                     }
                 }

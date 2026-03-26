@@ -171,11 +171,11 @@ struct SettingsContentView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Appearance")
-                        .font(.system(size: 14, weight: .bold, design: theme.fontDesign))
+                        .font(theme.font(size: 14, weight: .bold))
                         .foregroundStyle(theme.textPrimary)
 
                     Text("Choose your theme")
-                        .font(.system(size: 10, weight: .medium, design: theme.fontDesign))
+                        .font(theme.font(size: 10, weight: .medium))
                         .foregroundStyle(theme.textTertiary)
                 }
 
@@ -243,11 +243,11 @@ struct SettingsContentView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("Quota Display")
-                    .font(.system(size: 14, weight: .bold, design: theme.fontDesign))
+                    .font(theme.font(size: 14, weight: .bold))
                     .foregroundStyle(theme.textPrimary)
 
                 Text("Show remaining or used percentage")
-                    .font(.system(size: 10, weight: .medium, design: theme.fontDesign))
+                    .font(theme.font(size: 10, weight: .medium))
                     .foregroundStyle(theme.textTertiary)
             }
 
@@ -273,7 +273,7 @@ struct SettingsContentView: View {
     private var dailyUsageCardsToggle: some View {
         HStack {
             Text("Daily Usage Cards")
-                .font(.system(size: 12, weight: .medium, design: theme.fontDesign))
+                .font(theme.font(size: 12, weight: .medium))
                 .foregroundStyle(theme.textSecondary)
 
             Spacer()
@@ -302,11 +302,11 @@ struct SettingsContentView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("Overview")
-                    .font(.system(size: 14, weight: .bold, design: theme.fontDesign))
+                    .font(theme.font(size: 14, weight: .bold))
                     .foregroundStyle(theme.textPrimary)
 
                 Text("Show all providers at once")
-                    .font(.system(size: 10, weight: .medium, design: theme.fontDesign))
+                    .font(theme.font(size: 10, weight: .medium))
                     .foregroundStyle(theme.textTertiary)
             }
 
@@ -383,11 +383,11 @@ struct SettingsContentView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("Providers")
-                    .font(.system(size: 14, weight: .bold, design: theme.fontDesign))
+                    .font(theme.font(size: 14, weight: .bold))
                     .foregroundStyle(theme.textPrimary)
 
                 Text("Enable or disable AI providers")
-                    .font(.system(size: 10, weight: .medium, design: theme.fontDesign))
+                    .font(theme.font(size: 10, weight: .medium))
                     .foregroundStyle(theme.textTertiary)
             }
 
@@ -401,7 +401,7 @@ struct SettingsContentView: View {
             ProviderIconView(providerId: provider.id, size: 20)
 
             Text(provider.name)
-                .font(.system(size: 12, weight: .medium, design: theme.fontDesign))
+                .font(theme.font(size: 12, weight: .medium))
                 .foregroundStyle(theme.textPrimary)
 
             Spacer()
@@ -434,7 +434,7 @@ struct SettingsContentView: View {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 10, weight: .bold))
                     Text("Back")
-                        .font(.system(size: 11, weight: .medium, design: theme.fontDesign))
+                        .font(theme.font(size: 11, weight: .medium))
                 }
                 .foregroundStyle(theme.textPrimary)
                 .padding(.horizontal, 10)
@@ -453,7 +453,7 @@ struct SettingsContentView: View {
             Spacer()
 
             Text("Settings")
-                .font(.system(size: 16, weight: .bold, design: theme.fontDesign))
+                .font(theme.font(size: 16, weight: .bold))
                 .foregroundStyle(theme.textPrimary)
 
             Spacer()
@@ -485,7 +485,7 @@ struct SettingsContentView: View {
                             }
 
                             Text(sparkleUpdater?.isCheckingForUpdates == true ? "Checking..." : "Check for Updates")
-                                .font(.system(size: 11, weight: .medium, design: theme.fontDesign))
+                                .font(theme.font(size: 11, weight: .medium))
                         }
                         .foregroundStyle(.white)
                         .padding(.horizontal, 14)
@@ -515,14 +515,14 @@ struct SettingsContentView: View {
                                 .font(.system(size: 8))
 
                             Text("Last checked: \(lastCheck.formatted(date: .abbreviated, time: .shortened))")
-                                .font(.system(size: 9, weight: .semibold, design: theme.fontDesign))
+                                .font(theme.font(size: 9, weight: .semibold))
                         }
                         .foregroundStyle(theme.textTertiary)
                     }
 
                     HStack {
                         Text("Check automatically")
-                            .font(.system(size: 11, weight: .medium, design: theme.fontDesign))
+                            .font(theme.font(size: 11, weight: .medium))
                             .foregroundStyle(theme.textPrimary)
 
                         Spacer()
@@ -540,11 +540,11 @@ struct SettingsContentView: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Include beta versions")
-                                .font(.system(size: 11, weight: .medium, design: theme.fontDesign))
+                                .font(theme.font(size: 11, weight: .medium))
                                 .foregroundStyle(theme.textPrimary)
 
                             Text("Get early access to new features")
-                                .font(.system(size: 9, weight: .semibold, design: theme.fontDesign))
+                                .font(theme.font(size: 9, weight: .semibold))
                                 .foregroundStyle(theme.textTertiary)
                         }
 
@@ -561,7 +561,7 @@ struct SettingsContentView: View {
                         Image(systemName: "hammer.fill")
                             .font(.system(size: 10))
                         Text("Updates unavailable in debug builds")
-                            .font(.system(size: 10, weight: .medium, design: theme.fontDesign))
+                            .font(theme.font(size: 10, weight: .medium))
                     }
                     .foregroundStyle(theme.textTertiary)
                 }
@@ -616,11 +616,11 @@ struct SettingsContentView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("Updates")
-                    .font(.system(size: 14, weight: .bold, design: theme.fontDesign))
+                    .font(theme.font(size: 14, weight: .bold))
                     .foregroundStyle(theme.textPrimary)
 
                 Text("Version \(appVersion)")
-                    .font(.system(size: 10, weight: .medium, design: theme.fontDesign))
+                    .font(theme.font(size: 10, weight: .medium))
                     .foregroundStyle(theme.textTertiary)
             }
 
@@ -666,11 +666,11 @@ struct SettingsContentView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Logs")
-                        .font(.system(size: 14, weight: .bold, design: theme.fontDesign))
+                        .font(theme.font(size: 14, weight: .bold))
                         .foregroundStyle(theme.textPrimary)
 
                     Text("View application logs")
-                        .font(.system(size: 10, weight: .medium, design: theme.fontDesign))
+                        .font(theme.font(size: 10, weight: .medium))
                         .foregroundStyle(theme.textTertiary)
                 }
 
@@ -685,7 +685,7 @@ struct SettingsContentView: View {
                         .font(.system(size: 11, weight: .semibold))
 
                     Text("Open Log File")
-                        .font(.system(size: 11, weight: .medium, design: theme.fontDesign))
+                        .font(theme.font(size: 11, weight: .medium))
                 }
                 .foregroundStyle(.white)
                 .padding(.horizontal, 14)
@@ -708,7 +708,7 @@ struct SettingsContentView: View {
             .buttonStyle(.plain)
 
             Text("Opens ClaudeBar.log in TextEdit")
-                .font(.system(size: 9, weight: .semibold, design: theme.fontDesign))
+                .font(theme.font(size: 9, weight: .semibold))
                 .foregroundStyle(theme.textTertiary)
         }
         .padding(14)
@@ -746,11 +746,11 @@ struct SettingsContentView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("About")
-                        .font(.system(size: 14, weight: .bold, design: theme.fontDesign))
+                        .font(theme.font(size: 14, weight: .bold))
                         .foregroundStyle(theme.textPrimary)
 
                     Text("Version \(appVersion) (\(appBuild))")
-                        .font(.system(size: 10, weight: .medium, design: theme.fontDesign))
+                        .font(theme.font(size: 10, weight: .medium))
                         .foregroundStyle(theme.textTertiary)
                 }
 
@@ -763,7 +763,7 @@ struct SettingsContentView: View {
                         .font(.system(size: 11, weight: .semibold))
 
                     Text("View on GitHub")
-                        .font(.system(size: 11, weight: .medium, design: theme.fontDesign))
+                        .font(theme.font(size: 11, weight: .medium))
 
                     Spacer()
 
@@ -790,7 +790,7 @@ struct SettingsContentView: View {
             .buttonStyle(.plain)
 
             Text("Report issues or contribute on GitHub")
-                .font(.system(size: 9, weight: .semibold, design: theme.fontDesign))
+                .font(theme.font(size: 9, weight: .semibold))
                 .foregroundStyle(theme.textTertiary)
         }
         .padding(14)
@@ -836,11 +836,11 @@ struct SettingsContentView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("Launch at Login")
-                    .font(.system(size: 14, weight: .bold, design: theme.fontDesign))
+                    .font(theme.font(size: 14, weight: .bold))
                     .foregroundStyle(theme.textPrimary)
 
                 Text("Start ClaudeBar when you log in")
-                    .font(.system(size: 10, weight: .medium, design: theme.fontDesign))
+                    .font(theme.font(size: 10, weight: .medium))
                     .foregroundStyle(theme.textTertiary)
             }
 
@@ -874,7 +874,7 @@ struct SettingsContentView: View {
             VStack(alignment: .leading, spacing: 14) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("SYNC INTERVAL")
-                        .font(.system(size: 9, weight: .semibold, design: theme.fontDesign))
+                        .font(theme.font(size: 9, weight: .semibold))
                         .foregroundStyle(theme.textSecondary)
                         .tracking(0.5)
 
@@ -889,7 +889,7 @@ struct SettingsContentView: View {
                 }
 
                 Text("Sync usage data in the background so it's always fresh when you check.")
-                    .font(.system(size: 9, weight: .semibold, design: theme.fontDesign))
+                    .font(theme.font(size: 9, weight: .semibold))
                     .foregroundStyle(theme.textTertiary)
             }
             .opacity(settings.backgroundSyncEnabled ? 1 : 0.6)
@@ -936,11 +936,11 @@ struct SettingsContentView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("Background Sync")
-                    .font(.system(size: 14, weight: .bold, design: theme.fontDesign))
+                    .font(theme.font(size: 14, weight: .bold))
                     .foregroundStyle(theme.textPrimary)
 
                 Text("Keep data fresh automatically")
-                    .font(.system(size: 10, weight: .medium, design: theme.fontDesign))
+                    .font(theme.font(size: 10, weight: .medium))
                     .foregroundStyle(theme.textTertiary)
             }
 
@@ -971,11 +971,11 @@ struct SettingsContentView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Burn Rate Warnings")
-                        .font(.system(size: 14, weight: .bold, design: theme.fontDesign))
+                        .font(theme.font(size: 14, weight: .bold))
                         .foregroundStyle(theme.textPrimary)
 
                     Text("Warn based on consumption pace, not fixed thresholds")
-                        .font(.system(size: 10, weight: .medium, design: theme.fontDesign))
+                        .font(theme.font(size: 10, weight: .medium))
                         .foregroundStyle(theme.textTertiary)
                 }
 
@@ -991,7 +991,7 @@ struct SettingsContentView: View {
             if settings.burnRateWarningEnabled {
                 HStack {
                     Text("Threshold")
-                        .font(.system(size: 12, weight: .medium, design: theme.fontDesign))
+                        .font(theme.font(size: 12, weight: .medium))
                         .foregroundStyle(theme.textSecondary)
 
                     Spacer()
@@ -1032,18 +1032,18 @@ struct SettingsContentView: View {
                         .fill(hooksInstalled ? Color.green : Color.gray)
                         .frame(width: 6, height: 6)
                     Text(hooksInstalled ? "Hooks installed in ~/.claude/settings.json" : "Hooks not installed")
-                        .font(.system(size: 9, weight: .semibold, design: theme.fontDesign))
+                        .font(theme.font(size: 9, weight: .semibold))
                         .foregroundStyle(theme.textSecondary)
                 }
 
                 if let hookError {
                     Text(hookError)
-                        .font(.system(size: 9, weight: .semibold, design: theme.fontDesign))
+                        .font(theme.font(size: 9, weight: .semibold))
                         .foregroundStyle(.red)
                 }
 
                 Text("Track Claude Code sessions in real-time. Shows active session status, subagent activity, and task completion.")
-                    .font(.system(size: 9, weight: .semibold, design: theme.fontDesign))
+                    .font(theme.font(size: 9, weight: .semibold))
                     .foregroundStyle(theme.textTertiary)
             }
         } label: {
@@ -1089,11 +1089,11 @@ struct SettingsContentView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("Claude Code Hooks")
-                    .font(.system(size: 14, weight: .bold, design: theme.fontDesign))
+                    .font(theme.font(size: 14, weight: .bold))
                     .foregroundStyle(theme.textPrimary)
 
                 Text("Live session tracking")
-                    .font(.system(size: 10, weight: .medium, design: theme.fontDesign))
+                    .font(theme.font(size: 10, weight: .medium))
                     .foregroundStyle(theme.textTertiary)
             }
 
@@ -1140,7 +1140,7 @@ struct SettingsContentView: View {
                 }
             } label: {
                 Text("Done")
-                    .font(.system(size: 11, weight: .medium, design: theme.fontDesign))
+                    .font(theme.font(size: 11, weight: .medium))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 7)
@@ -1261,7 +1261,7 @@ struct DisplayModeButton: View {
                     .font(.system(size: 10, weight: .bold))
 
                 Text(mode.displayLabel)
-                    .font(.system(size: 11, weight: .semibold, design: theme.fontDesign))
+                    .font(theme.font(size: 11, weight: .semibold))
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 8)

@@ -42,5 +42,7 @@
     <true/>
     <key>ITSAppUsesNonExemptEncryption</key>
     <false/>
+    <key>ATSApplicationFontsPath</key>
+    <string>Fonts</string>
 </dict>
 </plist>

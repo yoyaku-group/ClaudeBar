@@ -24,12 +24,12 @@ struct BedrockConfigCard: View {
                 // AWS Profile Name
                 VStack(alignment: .leading, spacing: 6) {
                     Text("AWS PROFILE NAME")
-                        .font(.system(size: 9, weight: .semibold, design: theme.fontDesign))
+                        .font(theme.font(size: 9, weight: .semibold))
                         .foregroundStyle(theme.textSecondary)
                         .tracking(0.5)
 
                     TextField("", text: $awsProfileNameInput, prompt: Text("default").foregroundStyle(theme.textTertiary))
-                        .font(.system(size: 12, weight: .medium, design: theme.fontDesign))
+                        .font(theme.font(size: 12, weight: .medium))
                         .foregroundStyle(theme.textPrimary)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 8)
@@ -49,12 +49,12 @@ struct BedrockConfigCard: View {
                 // Regions
                 VStack(alignment: .leading, spacing: 6) {
                     Text("REGIONS (COMMA-SEPARATED)")
-                        .font(.system(size: 9, weight: .semibold, design: theme.fontDesign))
+                        .font(theme.font(size: 9, weight: .semibold))
                         .foregroundStyle(theme.textSecondary)
                         .tracking(0.5)
 
                     TextField("", text: $bedrockRegionsInput, prompt: Text("us-east-1, us-west-2").foregroundStyle(theme.textTertiary))
-                        .font(.system(size: 12, weight: .medium, design: theme.fontDesign))
+                        .font(theme.font(size: 12, weight: .medium))
                         .foregroundStyle(theme.textPrimary)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 8)
@@ -75,17 +75,17 @@ struct BedrockConfigCard: View {
                 // Daily Budget
                 VStack(alignment: .leading, spacing: 6) {
                     Text("DAILY BUDGET (USD, OPTIONAL)")
-                        .font(.system(size: 9, weight: .semibold, design: theme.fontDesign))
+                        .font(theme.font(size: 9, weight: .semibold))
                         .foregroundStyle(theme.textSecondary)
                         .tracking(0.5)
 
                     HStack(spacing: 6) {
                         Text("$")
-                            .font(.system(size: 12, weight: .medium, design: theme.fontDesign))
+                            .font(theme.font(size: 12, weight: .medium))
                             .foregroundStyle(theme.textSecondary)
 
                         TextField("", text: $bedrockDailyBudgetInput, prompt: Text("50.00").foregroundStyle(theme.textTertiary))
-                            .font(.system(size: 12, weight: .medium, design: theme.fontDesign))
+                            .font(theme.font(size: 12, weight: .medium))
                             .foregroundStyle(theme.textPrimary)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 8)
@@ -110,11 +110,11 @@ struct BedrockConfigCard: View {
                 // Help text
                 VStack(alignment: .leading, spacing: 4) {
                     Text("AWS credentials are loaded from your configured profile.")
-                        .font(.system(size: 9, weight: .semibold, design: theme.fontDesign))
+                        .font(theme.font(size: 9, weight: .semibold))
                         .foregroundStyle(theme.textTertiary)
 
                     Text("Configure with: aws configure --profile <name>")
-                        .font(.system(size: 9, weight: .semibold, design: theme.fontDesign))
+                        .font(theme.font(size: 9, weight: .semibold))
                         .foregroundStyle(theme.textTertiary)
                 }
 
@@ -122,7 +122,7 @@ struct BedrockConfigCard: View {
                 Link(destination: URL(string: "https://console.aws.amazon.com/bedrock/home")!) {
                     HStack(spacing: 3) {
                         Text("Open Bedrock Console")
-                            .font(.system(size: 9, weight: .semibold, design: theme.fontDesign))
+                            .font(theme.font(size: 9, weight: .semibold))
                         Image(systemName: "arrow.up.right")
                             .font(.system(size: 7, weight: .bold))
                     }
@@ -152,11 +152,11 @@ struct BedrockConfigCard: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("AWS Bedrock Configuration")
-                        .font(.system(size: 14, weight: .bold, design: theme.fontDesign))
+                        .font(theme.font(size: 14, weight: .bold))
                         .foregroundStyle(theme.textPrimary)
 
                     Text("CloudWatch usage tracking")
-                        .font(.system(size: 10, weight: .medium, design: theme.fontDesign))
+                        .font(theme.font(size: 10, weight: .medium))
                         .foregroundStyle(theme.textTertiary)
                 }
 
