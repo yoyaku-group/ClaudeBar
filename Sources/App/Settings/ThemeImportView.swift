@@ -54,7 +54,7 @@ struct ThemeImportButton: View {
         }
     }
 
-    private func handleImport(_ result: Result<[URL], Error>) {
+    @MainActor private func handleImport(_ result: Result<[URL], Error>) {
         importError = nil
         importedThemeName = nil
 

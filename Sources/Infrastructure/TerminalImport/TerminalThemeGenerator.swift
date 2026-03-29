@@ -30,6 +30,7 @@ public struct GeneratedThemeProperties: Sendable {
 public struct TerminalThemeGenerator {
 
     public static func generate(from scheme: TerminalColorScheme) -> GeneratedThemeProperties {
+        precondition(scheme.isValid, "TerminalColorScheme must have exactly 16 ANSI colors")
         let sanitizedId = scheme.name
             .lowercased()
             .replacingOccurrences(of: " ", with: "-")

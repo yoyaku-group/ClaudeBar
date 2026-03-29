@@ -98,7 +98,7 @@ public final class ThemeRegistry {
     private func loadImportedThemes() {
         for (scheme, _) in importedThemeStore.loadAll() {
             let props = TerminalThemeGenerator.generate(from: scheme)
-            let theme = ImportedTerminalTheme(properties: props, scheme: scheme)
+            let theme = ImportedTerminalTheme(props: props, scheme: scheme)
             register(theme)
         }
     }
@@ -109,7 +109,7 @@ public final class ThemeRegistry {
         let scheme = try ITermColorsParser.parse(from: url)
         try importedThemeStore.save(scheme)
         let props = TerminalThemeGenerator.generate(from: scheme)
-        let theme = ImportedTerminalTheme(properties: props, scheme: scheme)
+        let theme = ImportedTerminalTheme(props: props, scheme: scheme)
         register(theme)
         return theme
     }
