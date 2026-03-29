@@ -26,7 +26,7 @@ A macOS menu bar application that monitors AI coding assistant usage quotas. Kee
 - **Multi-Provider Support** - Monitor Claude, Codex, Gemini, GitHub Copilot, Antigravity, Z.ai, Kimi, Kiro, and Amp quotas in one place
 - **Provider Enable/Disable** - Toggle individual providers on/off from Settings to customize your monitoring
 - **Real-Time Quota Tracking** - View Session, Weekly, and Model-specific usage percentages
-- **Multiple Themes** - Light, Dark, CLI (terminal-style), and festive Christmas themes
+- **Multiple Themes** - Light, Dark, CLI, Christmas, and [imported terminal themes](#import-terminal-theme) (.itermcolors)
 - **Automatic Adaptation** - System theme follows your macOS appearance; Christmas auto-enables during the holiday season
 - **Visual Status Indicators** - Color-coded progress bars (green/yellow/red) show quota health
 - **System Notifications** - Get alerted when quota status changes to warning or critical
@@ -181,6 +181,18 @@ ClaudeBar uses a **layered architecture** with `QuotaMonitor` as the single sour
 - **Protocol-Based DI** - `@Mockable` protocols enable testability
 - **Chicago School TDD** - Tests verify state changes, not method calls
 - **No ViewModel/AppState** - Views consume domain directly
+
+## Import Terminal Theme
+
+Match ClaudeBar's appearance to your terminal. Import any `.itermcolors` file:
+
+1. Open **Settings** (gear icon)
+2. Click **Import .itermcolors**
+3. Select your file (export from iTerm2: Preferences > Profiles > Colors > Color Presets > Export)
+
+450+ pre-made schemes available at [iTerm2-Color-Schemes](https://github.com/mbadolato/iTerm2-Color-Schemes/tree/master/schemes).
+
+Imported themes are saved in `~/.claudebar/themes/` and persist across restarts.
 
 ## Contributing
 
