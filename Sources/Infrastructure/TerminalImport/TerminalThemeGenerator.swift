@@ -1,0 +1,59 @@
+// Sources/Infrastructure/TerminalImport/TerminalThemeGenerator.swift
+import Foundation
+
+public struct GeneratedThemeProperties: Sendable {
+    public let id: String
+    public let displayName: String
+    public let isDark: Bool
+
+    public let background: TerminalColorScheme.RGBColor
+    public let cardBackground: TerminalColorScheme.RGBColor
+    public let glassBackground: TerminalColorScheme.RGBColor
+    public let glassBorder: TerminalColorScheme.RGBColor
+    public let glassHighlight: TerminalColorScheme.RGBColor
+
+    public let textPrimary: TerminalColorScheme.RGBColor
+    public let textSecondary: TerminalColorScheme.RGBColor
+    public let textTertiary: TerminalColorScheme.RGBColor
+
+    public let statusHealthy: TerminalColorScheme.RGBColor
+    public let statusWarning: TerminalColorScheme.RGBColor
+    public let statusCritical: TerminalColorScheme.RGBColor
+    public let statusDepleted: TerminalColorScheme.RGBColor
+
+    public let accentPrimary: TerminalColorScheme.RGBColor
+    public let accentSecondary: TerminalColorScheme.RGBColor
+
+    public let progressTrack: TerminalColorScheme.RGBColor
+}
+
+public struct TerminalThemeGenerator {
+
+    public static func generate(from scheme: TerminalColorScheme) -> GeneratedThemeProperties {
+        let sanitizedId = scheme.name
+            .lowercased()
+            .replacingOccurrences(of: " ", with: "-")
+            .replacingOccurrences(of: "[^a-z0-9\\-]", with: "", options: .regularExpression)
+
+        return GeneratedThemeProperties(
+            id: "imported-\(sanitizedId)",
+            displayName: scheme.name,
+            isDark: scheme.isDark,
+            background: scheme.background,
+            cardBackground: scheme.background.lightened(by: 0.08),
+            glassBackground: scheme.background.lightened(by: 0.05).withAlpha(0.8),
+            glassBorder: scheme.black.withAlpha(0.5),
+            glassHighlight: scheme.cyan.withAlpha(0.15),
+            textPrimary: scheme.boldText ?? scheme.foreground,
+            textSecondary: scheme.foreground,
+            textTertiary: scheme.foreground.withAlpha(0.7),
+            statusHealthy: scheme.green,
+            statusWarning: scheme.yellow,
+            statusCritical: scheme.red,
+            statusDepleted: scheme.red.withAlpha(0.7),
+            accentPrimary: scheme.cyan,
+            accentSecondary: scheme.blue,
+            progressTrack: scheme.selection ?? scheme.background.lightened(by: 0.15)
+        )
+    }
+}
