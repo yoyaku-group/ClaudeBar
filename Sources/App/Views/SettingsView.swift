@@ -69,6 +69,16 @@ struct SettingsContentView: View {
         monitor.provider(for: ProviderID.alibaba)?.isEnabled ?? false
     }
 
+    /// Extension providers that are enabled and have config fields declared in their manifest.
+    private var enabledExtensionProvidersWithConfig: [ExtensionProvider] {
+        monitor.allProviders.compactMap { provider in
+            guard let extProvider = provider as? ExtensionProvider,
+                  extProvider.isEnabled,
+                  extProvider.manifest.hasConfig else { return nil }
+            return extProvider
+        }
+    }
+
     /// Maximum height for the settings view to ensure it fits on small screens
     private var maxSettingsHeight: CGFloat {
         let screenHeight = NSScreen.main?.visibleFrame.height ?? 800
@@ -121,6 +131,13 @@ struct SettingsContentView: View {
                     if isBedrockEnabled {
                         BedrockConfigCard(monitor: monitor)
                             .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
+                    ForEach(enabledExtensionProvidersWithConfig, id: \.id) { extProvider in
+                        ExtensionConfigCard(
+                            provider: extProvider,
+                            configRepository: AppSettings.shared.extensionConfig
+                        )
+                        .transition(.opacity.combined(with: .move(edge: .top)))
                     }
                     backgroundSyncCard
                     burnRateCard
@@ -187,17 +204,20 @@ struct SettingsContentView: View {
                 GridItem(.flexible(), spacing: 8),
                 GridItem(.flexible(), spacing: 8)
             ], spacing: 8) {
-                ForEach(ThemeMode.allCases, id: \.rawValue) { mode in
+                ForEach(ThemeRegistry.shared.allThemes, id: \.id) { registeredTheme in
                     ThemeOptionButton(
-                        mode: mode,
-                        isSelected: currentThemeMode == mode
+                        themeProvider: registeredTheme,
+                        isSelected: settings.themeMode == registeredTheme.id
                     ) {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                            settings.themeMode = mode.rawValue
+                            settings.themeMode = registeredTheme.id
                         }
                     }
                 }
             }
+
+            ThemeImportButton()
+                .frame(maxWidth: .infinity)
         }
         .padding(14)
         .background(
@@ -396,28 +416,35 @@ struct SettingsContentView: View {
     }
 
     private func providerToggleRow(provider: any AIProvider) -> some View {
-        HStack(spacing: 10) {
-            // Provider icon
-            ProviderIconView(providerId: provider.id, size: 20)
+        VStack(spacing: 4) {
+            HStack(spacing: 10) {
+                // Provider icon
+                ProviderIconView(providerId: provider.id, size: 20)
 
-            Text(provider.name)
-                .font(.system(size: 12, weight: .medium, design: theme.fontDesign))
-                .foregroundStyle(theme.textPrimary)
+                Text(provider.name)
+                    .font(.system(size: 12, weight: .medium, design: theme.fontDesign))
+                    .foregroundStyle(theme.textPrimary)
 
-            Spacer()
+                Spacer()
 
-            Toggle("", isOn: Binding(
-                get: { provider.isEnabled },
-                set: { newValue in
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        monitor.setProviderEnabled(provider.id, enabled: newValue)
+                Toggle("", isOn: Binding(
+                    get: { provider.isEnabled },
+                    set: { newValue in
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            monitor.setProviderEnabled(provider.id, enabled: newValue)
+                        }
                     }
-                }
-            ))
-            .toggleStyle(.switch)
-            .tint(theme.accentPrimary)
-            .scaleEffect(0.8)
-            .labelsHidden()
+                ))
+                .toggleStyle(.switch)
+                .tint(theme.accentPrimary)
+                .scaleEffect(0.8)
+                .labelsHidden()
+            }
+
+            if provider.isEnabled {
+                CustomCardURLField(providerId: provider.id)
+                    .padding(.leading, 30)
+            }
         }
         .padding(.vertical, 4)
     }
@@ -1158,43 +1185,57 @@ struct SettingsContentView: View {
 // MARK: - Theme Option Button
 
 struct ThemeOptionButton: View {
-    let mode: ThemeMode
+    let themeProvider: any AppThemeProvider
     let isSelected: Bool
     let action: () -> Void
 
     @Environment(\.appTheme) private var theme
     @State private var isHovering = false
 
+    private var isImported: Bool {
+        ThemeRegistry.shared.isImported(id: themeProvider.id)
+    }
+
     var body: some View {
         Button(action: action) {
             HStack(spacing: 8) {
                 ZStack {
                     Circle()
-                        .fill(iconBackgroundGradient)
+                        .fill(themeProvider.accentGradient)
                         .frame(width: 28, height: 28)
 
-                    Image(systemName: mode.icon)
+                    Image(systemName: themeProvider.icon)
                         .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(mode == .cli ? Color.black : (mode == .yoyaku ? Color.black : .white))
+                        .foregroundStyle(
+                            themeProvider.id == "cli" || themeProvider.id == "yoyaku" ? Color.black : .white
+                        )
                 }
 
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(mode.displayName)
-                        .font(.system(size: 11, weight: .medium, design: mode == .cli ? .monospaced : theme.fontDesign))
+                    Text(themeProvider.displayName)
+                        .font(.system(size: 11, weight: .medium, design: themeProvider.fontDesign))
                         .foregroundStyle(theme.textPrimary)
+                        .lineLimit(1)
 
-                    if mode == .christmas {
-                        Text("Festive")
-                            .font(.system(size: 8, weight: .medium, design: .rounded))
-                            .foregroundStyle(ChristmasTheme().accentPrimary)
-                    } else if mode == .cli {
-                        Text("Terminal")
-                            .font(.system(size: 8, weight: .medium, design: .monospaced))
-                            .foregroundStyle(CLITheme().accentPrimary)
+                    if let subtitle = themeProvider.subtitle {
+                        Text(subtitle)
+                            .font(.system(size: 8, weight: .medium))
+                            .foregroundStyle(themeProvider.accentPrimary)
                     }
                 }
 
                 Spacer()
+
+                if isImported {
+                    Button {
+                        ThemeRegistry.shared.removeImportedTheme(id: themeProvider.id)
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 12))
+                            .foregroundStyle(theme.textTertiary)
+                    }
+                    .buttonStyle(.plain)
+                }
 
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
@@ -1205,10 +1246,10 @@ struct ThemeOptionButton: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
             .background(
-                RoundedRectangle(cornerRadius: mode == .cli ? 6 : 10)
+                RoundedRectangle(cornerRadius: themeProvider.cardCornerRadius)
                     .fill(isSelected ? theme.accentPrimary.opacity(0.15) : (isHovering ? theme.hoverOverlay : Color.clear))
                     .overlay(
-                        RoundedRectangle(cornerRadius: mode == .cli ? 6 : 10)
+                        RoundedRectangle(cornerRadius: themeProvider.cardCornerRadius)
                             .stroke(isSelected ? theme.accentPrimary : theme.glassBorder.opacity(0.5), lineWidth: isSelected ? 2 : 1)
                     )
             )
@@ -1216,23 +1257,6 @@ struct ThemeOptionButton: View {
         }
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
-    }
-
-    private var iconBackgroundGradient: LinearGradient {
-        switch mode {
-        case .light:
-            return LinearGradient(colors: [Color.orange, Color.yellow], startPoint: .topLeading, endPoint: .bottomTrailing)
-        case .dark:
-            return LinearGradient(colors: [Color.indigo, Color.purple], startPoint: .topLeading, endPoint: .bottomTrailing)
-        case .system:
-            return LinearGradient(colors: [Color.gray, Color.secondary], startPoint: .topLeading, endPoint: .bottomTrailing)
-        case .cli:
-            return CLITheme().accentGradient
-        case .yoyaku:
-            return YoyakuTheme().accentGradient
-        case .christmas:
-            return ChristmasTheme().accentGradient
-        }
     }
 }
 

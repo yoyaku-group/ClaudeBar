@@ -202,6 +202,39 @@ enum ThemeMode: String, CaseIterable {
 }
 ```
 
+## Importing Terminal Themes
+
+ClaudeBar can import `.itermcolors` files to automatically generate themes from terminal color schemes. Over 450 pre-made schemes are available at [iTerm2-Color-Schemes](https://github.com/mbadolato/iTerm2-Color-Schemes).
+
+### How It Works
+
+1. **Parse** — `ITermColorsParser` reads the XML plist, extracting 16 ANSI colors + background/foreground
+2. **Generate** — `TerminalThemeGenerator` maps ANSI colors to `AppThemeProvider` properties:
+   - ANSI Red → `statusCritical`
+   - ANSI Green → `statusHealthy`
+   - ANSI Yellow → `statusWarning`
+   - ANSI Cyan → `accentPrimary`
+   - ANSI Blue → `accentSecondary`
+   - Background → `backgroundGradient`, derived card/glass colors
+   - Foreground → `textPrimary`/`textSecondary`/`textTertiary`
+3. **Persist** — Schemes are saved as JSON in `~/.claudebar/themes/`
+4. **Register** — On launch, stored schemes are re-generated and registered in `ThemeRegistry`
+
+### Files
+
+| Component | Location |
+|-----------|----------|
+| Color model | `Sources/Infrastructure/TerminalImport/TerminalColorScheme.swift` |
+| Parser | `Sources/Infrastructure/TerminalImport/ITermColorsParser.swift` |
+| Generator | `Sources/Infrastructure/TerminalImport/TerminalThemeGenerator.swift` |
+| Theme | `Sources/App/Theme/ImportedTerminalTheme.swift` |
+| Storage | `Sources/App/Theme/ImportedThemeStore.swift` |
+| UI | `Sources/App/Settings/ThemeImportView.swift` |
+
+### Adding Support for Other Formats
+
+Create a new parser in `Sources/Infrastructure/TerminalImport/` that produces a `TerminalColorScheme`. The generator and theme layers work with any source format.
+
 ## Theme Properties Reference
 
 ### Background

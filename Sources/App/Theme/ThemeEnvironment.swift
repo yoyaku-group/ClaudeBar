@@ -54,7 +54,13 @@ public struct AppThemeProviderModifier: ViewModifier {
         switch mode {
         case .light: return .light
         case .dark, .cli, .yoyaku, .christmas: return .dark
-        case .system, .none: return systemColorScheme
+        case .system: return systemColorScheme
+        case .none:
+            // Imported theme — check dark preference
+            if let imported = ThemeRegistry.shared.theme(for: themeModeId) as? ImportedTerminalTheme {
+                return imported.prefersDarkColorScheme ? .dark : .light
+            }
+            return systemColorScheme
         }
     }
 

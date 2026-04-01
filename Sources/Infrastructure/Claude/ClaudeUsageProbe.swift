@@ -20,15 +20,20 @@ public final class ClaudeUsageProbe: UsageProbe, @unchecked Sendable {
     /// `user:inference` scope and cannot access quota data via `/usage`.
     static let envExclusions = ["CLAUDE_CODE_OAUTH_TOKEN"]
 
+    /// Resolves account info from `~/.claude.json`
+    private let accountInfoResolver: any AccountInfoResolving
+
     public init(
         claudeBinary: String = "claude",
         timeout: TimeInterval = 20.0,
-        cliExecutor: CLIExecutor? = nil
+        cliExecutor: CLIExecutor? = nil,
+        accountInfoResolver: any AccountInfoResolving = ClaudeAccountInfoResolver()
     ) {
         self.claudeBinary = claudeBinary
         self.timeout = timeout
         self.cliExecutor = cliExecutor ?? DefaultCLIExecutor(environmentExclusions: Self.envExclusions)
         self.terminalRenderer = TerminalRenderer(cols: 160, rows: 50)
+        self.accountInfoResolver = accountInfoResolver
     }
 
     public func isAvailable() async -> Bool {
@@ -149,15 +154,16 @@ public final class ClaudeUsageProbe: UsageProbe, @unchecked Sendable {
 
     // MARK: - Parsing
 
-    /// Parses Claude CLI /usage output into a UsageSnapshot (for testing)
-    public static func parse(_ text: String) throws -> UsageSnapshot {
-        let probe = ClaudeUsageProbe()
+    /// Parses Claude CLI /usage output into a UsageSnapshot (for testing).
+    /// Uses a no-op resolver by default so tests don't read real `~/.claude.json`.
+    public static func parse(_ text: String, accountInfoResolver: any AccountInfoResolving = NoOpAccountInfoResolver()) throws -> UsageSnapshot {
+        let probe = ClaudeUsageProbe(accountInfoResolver: accountInfoResolver)
         return try probe.parseClaudeOutput(text)
     }
 
     /// Parses Claude CLI /cost output into a UsageSnapshot (for testing)
     public static func parseCost(_ text: String) throws -> UsageSnapshot {
-        let probe = ClaudeUsageProbe()
+        let probe = ClaudeUsageProbe(accountInfoResolver: NoOpAccountInfoResolver())
         return try probe.parseCostOutput(text)
     }
 
@@ -272,13 +278,13 @@ public final class ClaudeUsageProbe: UsageProbe, @unchecked Sendable {
         }
 
         // Detect account type from header (e.g., "Opus 4.5 · Claude Max" or "Opus 4.5 · Claude Pro")
-        let accountType = detectAccountType(clean)
-        let email = extractEmail(text: clean)
-        let organization = extractOrganization(text: clean)
-        let loginMethod = extractLoginMethod(text: clean)
+        let accountTier = detectAccountType(clean)
+        // Account info (email, org) comes from ~/.claude.json via resolver
+        // CLI /usage tab no longer includes account details since v2.1.79+
+        let accountInfo = accountInfoResolver.resolve()
 
         // API Usage Billing accounts don't have quota data - fall back to /cost
-        if accountType == .claudeApi {
+        if accountTier == .claudeApi {
             AppLog.probes.info("Detected API Usage Billing account, falling back to /cost")
             throw ProbeError.subscriptionRequired
         }
@@ -352,10 +358,10 @@ public final class ClaudeUsageProbe: UsageProbe, @unchecked Sendable {
             providerId: "claude",
             quotas: quotas,
             capturedAt: Date(),
-            accountEmail: email,
-            accountOrganization: organization,
-            loginMethod: loginMethod,
-            accountTier: accountType,
+            accountEmail: accountInfo?.email,
+            accountOrganization: accountInfo?.organization,
+            loginMethod: accountInfo?.loginMethod,
+            accountTier: accountTier,
             costUsage: extraUsage
         )
     }

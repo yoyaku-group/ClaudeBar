@@ -29,6 +29,9 @@ public struct UsageSnapshot: Sendable, Equatable {
     /// Daily usage report from local session JSONL analysis (e.g., Claude Code)
     public let dailyUsageReport: DailyUsageReport?
 
+    /// Generic metrics from extension probes
+    public let extensionMetrics: [ExtensionMetric]?
+
     // MARK: - Initialization
 
     public init(
@@ -41,7 +44,8 @@ public struct UsageSnapshot: Sendable, Equatable {
         accountTier: AccountTier? = nil,
         costUsage: CostUsage? = nil,
         bedrockUsage: BedrockUsageSummary? = nil,
-        dailyUsageReport: DailyUsageReport? = nil
+        dailyUsageReport: DailyUsageReport? = nil,
+        extensionMetrics: [ExtensionMetric]? = nil
     ) {
         self.providerId = providerId
         self.quotas = quotas
@@ -53,6 +57,7 @@ public struct UsageSnapshot: Sendable, Equatable {
         self.costUsage = costUsage
         self.bedrockUsage = bedrockUsage
         self.dailyUsageReport = dailyUsageReport
+        self.extensionMetrics = extensionMetrics
     }
 
     // MARK: - Domain Queries

@@ -31,6 +31,18 @@ public final class UserDefaultsProviderSettingsRepository: ZaiSettingsRepository
         userDefaults.set(enabled, forKey: key)
     }
 
+    public func customCardURL(forProvider id: String) -> String? {
+        userDefaults.string(forKey: "provider.\(id).customCardURL")
+    }
+
+    public func setCustomCardURL(_ url: String?, forProvider id: String) {
+        if let url, !url.isEmpty {
+            userDefaults.set(url, forKey: "provider.\(id).customCardURL")
+        } else {
+            userDefaults.removeObject(forKey: "provider.\(id).customCardURL")
+        }
+    }
+
     // MARK: - ZaiSettingsRepository
 
     public func zaiConfigPath() -> String {
@@ -188,6 +200,14 @@ public final class UserDefaultsProviderSettingsRepository: ZaiSettingsRepository
 
     public func setClaudeProbeMode(_ mode: ClaudeProbeMode) {
         userDefaults.set(mode.rawValue, forKey: Keys.claudeProbeMode)
+    }
+
+    public func claudeCliFallbackEnabled() -> Bool {
+        userDefaults.object(forKey: Keys.claudeCliFallbackEnabled) as? Bool ?? true
+    }
+
+    public func setClaudeCliFallbackEnabled(_ enabled: Bool) {
+        userDefaults.set(enabled, forKey: Keys.claudeCliFallbackEnabled)
     }
 
     // MARK: - CodexSettingsRepository
@@ -366,6 +386,7 @@ public final class UserDefaultsProviderSettingsRepository: ZaiSettingsRepository
         static let hookPort = "hookConfig.port"
         // Claude settings
         static let claudeProbeMode = "providerConfig.claudeProbeMode"
+        static let claudeCliFallbackEnabled = "providerConfig.claudeCliFallbackEnabled"
         // Codex settings
         static let codexProbeMode = "providerConfig.codexProbeMode"
         // Kimi settings

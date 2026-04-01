@@ -83,6 +83,9 @@ public protocol AppThemeProvider {
     /// Font design (default, rounded, monospaced, serif)
     var fontDesign: Font.Design { get }
 
+    /// Custom font family name (e.g., "IBM Plex Mono"). When set, views use this instead of system font.
+    var customFontName: String? { get }
+
     // MARK: - Status Colors
 
     /// Healthy status color (>50% remaining)
@@ -145,6 +148,9 @@ public extension AppThemeProvider {
     /// Default status bar icon is nil (uses status-based icons)
     var statusBarIconName: String? { nil }
 
+    /// Default custom font is nil (uses system font with fontDesign)
+    var customFontName: String? { nil }
+
     /// Default overlay is nil
     @MainActor var overlayView: AnyView? { nil }
 
@@ -166,6 +172,25 @@ public extension AppThemeProvider {
         default: [accentSecondary, statusHealthy]
         }
         return LinearGradient(colors: colors, startPoint: .leading, endPoint: .trailing)
+    }
+}
+
+// MARK: - Theme Font Helper
+
+public extension AppThemeProvider {
+    /// Returns the appropriate font for this theme — custom font if set, otherwise system font with fontDesign.
+    func font(size: CGFloat, weight: Font.Weight = .regular) -> Font {
+        if let name = customFontName {
+            let suffix: String = switch weight {
+            case .bold, .heavy, .black: "-Bold"
+            case .semibold: "-SemiBold"
+            case .medium: "-Medium"
+            case .light, .ultraLight, .thin: "-Light"
+            default: "-Regular"
+            }
+            return .custom("\(name)\(suffix)", size: size)
+        }
+        return .system(size: size, weight: weight, design: fontDesign)
     }
 }
 

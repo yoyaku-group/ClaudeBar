@@ -23,6 +23,8 @@ struct BedrockUsageProbeTests {
         func setBedrockDailyBudget(_ amount: Decimal?) { dailyBudget = amount }
         func isEnabled(forProvider id: String, defaultValue: Bool) -> Bool { enabledState }
         func setEnabled(_ enabled: Bool, forProvider id: String) { enabledState = enabled }
+        func customCardURL(forProvider id: String) -> String? { nil }
+        func setCustomCardURL(_ url: String?, forProvider id: String) {}
     }
 
     // MARK: - Mock CloudWatch Client

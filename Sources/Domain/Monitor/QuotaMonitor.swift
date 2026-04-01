@@ -204,7 +204,13 @@ public final class QuotaMonitor: @unchecked Sendable {
 
     // MARK: - Continuous Monitoring
 
+    /// Refreshes only the currently selected provider.
+    public func refreshSelected() async {
+        await refresh(providerId: selectedProviderId)
+    }
+
     /// Starts continuous monitoring at the specified interval.
+    /// Only refreshes the currently selected provider each cycle to minimize energy usage.
     /// Returns an AsyncStream of monitoring events.
     public func startMonitoring(interval: Duration = .seconds(60)) -> AsyncStream<MonitoringEvent> {
         // Stop any existing monitoring
@@ -215,7 +221,7 @@ public final class QuotaMonitor: @unchecked Sendable {
         return AsyncStream { continuation in
             let task = Task {
                 while !Task.isCancelled {
-                    await self.refreshAll()
+                    await self.refreshSelected()
                     continuation.yield(.refreshed)
 
                     do {

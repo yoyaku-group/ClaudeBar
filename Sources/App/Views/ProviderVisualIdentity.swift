@@ -352,6 +352,34 @@ extension MiniMaxProvider: ProviderVisualIdentity {
     }
 }
 
+// MARK: - MistralProvider Visual Identity
+
+extension MistralProvider: ProviderVisualIdentity {
+    public var symbolIcon: String { "cat.fill" }
+
+    public var iconAssetName: String { "MistralIcon" }
+
+    public func themeColor(for scheme: ColorScheme) -> Color {
+        // Mistral brand orange
+        scheme == .dark
+            ? Color(red: 1.0, green: 0.55, blue: 0.0)
+            : Color(red: 0.90, green: 0.45, blue: 0.0)
+    }
+
+    public func themeGradient(for scheme: ColorScheme) -> LinearGradient {
+        LinearGradient(
+            colors: [
+                themeColor(for: scheme),
+                scheme == .dark
+                    ? Color(red: 0.85, green: 0.35, blue: 0.10)
+                    : Color(red: 0.75, green: 0.25, blue: 0.05)
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+}
+
 // MARK: - AIProvider Visual Identity Helper
 
 /// Extension to access visual identity from any AIProvider.
@@ -444,6 +472,10 @@ enum ProviderVisualIdentityLookup {
             return scheme == .dark
                 ? Color(red: 0.20, green: 0.78, blue: 0.82)
                 : Color(red: 0.12, green: 0.62, blue: 0.66)
+        case "mistral":
+            return scheme == .dark
+                ? Color(red: 1.0, green: 0.55, blue: 0.0)
+                : Color(red: 0.90, green: 0.45, blue: 0.0)
         default:
             return BaseTheme.purpleVibrant
         }
@@ -503,6 +535,10 @@ enum ProviderVisualIdentityLookup {
             secondaryColor = scheme == .dark
                 ? Color(red: 0.15, green: 0.55, blue: 0.75)
                 : Color(red: 0.08, green: 0.45, blue: 0.60)
+        case "mistral":
+            secondaryColor = scheme == .dark
+                ? Color(red: 0.85, green: 0.35, blue: 0.10)
+                : Color(red: 0.75, green: 0.25, blue: 0.05)
         default:
             return LinearGradient(
                 colors: [BaseTheme.coralAccent, BaseTheme.pinkHot],
@@ -533,6 +569,7 @@ enum ProviderVisualIdentityLookup {
         case "kiro": return "KiroIcon"
         case "minimax": return "MiniMaxIcon"
         case "cursor": return "CursorIcon"
+        case "mistral": return "MistralIcon"
         default: return "QuestionIcon"
         }
     }
@@ -552,6 +589,7 @@ enum ProviderVisualIdentityLookup {
         case "kiro": return "Kiro"
         case "minimax": return "MiniMax"
         case "cursor": return "Cursor"
+        case "mistral": return "Mistral"
         default: return providerId.capitalized
         }
     }
@@ -571,6 +609,7 @@ enum ProviderVisualIdentityLookup {
         case "kiro": return "wand.and.stars.inverse"
         case "minimax": return "waveform"
         case "cursor": return "cursorarrow.rays"
+        case "mistral": return "cat.fill"
         default: return "questionmark.circle.fill"
         }
     }

@@ -14,6 +14,12 @@ public protocol ProviderSettingsRepository: Sendable {
 
     /// Gets the enabled state for a provider with a custom default
     func isEnabled(forProvider id: String, defaultValue: Bool) -> Bool
+
+    /// Gets the custom card URL for a provider (nil if not set)
+    func customCardURL(forProvider id: String) -> String?
+
+    /// Sets the custom card URL for a provider (empty string or nil to remove)
+    func setCustomCardURL(_ url: String?, forProvider id: String)
 }
 
 /// Z.ai-specific settings repository, extending base ProviderSettingsRepository.
@@ -164,6 +170,13 @@ public protocol ClaudeSettingsRepository: ProviderSettingsRepository {
 
     /// Sets the probe mode for Claude
     func setClaudeProbeMode(_ mode: ClaudeProbeMode)
+
+    /// Whether to fall back to the CLI probe when the OAuth API probe is unavailable.
+    /// Defaults to true. Disable to prevent `claude /usage` from running in API mode.
+    func claudeCliFallbackEnabled() -> Bool
+
+    /// Sets whether CLI fallback is enabled in API mode
+    func setClaudeCliFallbackEnabled(_ enabled: Bool)
 }
 
 /// Codex-specific settings repository, extending base ProviderSettingsRepository.
