@@ -2,7 +2,7 @@ name: Build YOYAKU Theme
 
 on:
   push:
-    branches: [feat/yoyaku-theme]
+    branches: [main]
   workflow_dispatch:
 
 env:
