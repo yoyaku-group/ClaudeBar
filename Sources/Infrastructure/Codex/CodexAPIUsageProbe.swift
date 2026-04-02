@@ -299,8 +299,8 @@ public struct CodexAPIUsageProbe: UsageProbe, @unchecked Sendable {
             providerId: "codex",
             quotas: quotas,
             capturedAt: Date(),
-            accountEmail: nil,
-            accountOrganization: nil,
+            accountEmail: responseDict["email"] as? String,
+            accountOrganization: responseDict["account_id"] as? String,
             loginMethod: nil,
             accountTier: accountTier,
             costUsage: costUsage

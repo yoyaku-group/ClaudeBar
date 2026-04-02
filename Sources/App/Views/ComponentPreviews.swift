@@ -158,6 +158,29 @@ import Domain
     .background(theme.backgroundGradient)
 }
 
+#Preview("CLI Theme Snapshot") {
+    let quotas = [
+        UsageQuota(percentRemaining: 63, quotaType: .session, providerId: "claude", resetText: "Resets in 2h 16m"),
+        UsageQuota(percentRemaining: 63, quotaType: .weekly, providerId: "claude", resetText: "Resets in 5d 15h 16m"),
+        UsageQuota(percentRemaining: 95, quotaType: .modelSpecific("Sonnet"), providerId: "claude", resetText: "Resets in 5d 15h 16m"),
+    ]
+
+    return VStack(alignment: .leading, spacing: 12) {
+        ProviderSectionView(
+            snapshot: UsageSnapshot(
+                providerId: "claude",
+                quotas: quotas,
+                capturedAt: .now,
+                accountEmail: "ben@yoyaku.fr"
+            )
+        )
+    }
+    .padding(24)
+    .frame(width: 420)
+    .background(CLITheme().backgroundGradient)
+    .themeProvider(.cli)
+}
+
 // MARK: - Action Buttons Preview
 
 #Preview("Action Buttons") {

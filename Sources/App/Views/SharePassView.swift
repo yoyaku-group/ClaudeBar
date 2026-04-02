@@ -9,11 +9,12 @@ struct SharePassOverlay: View {
     @Environment(\.appTheme) private var theme
     @Environment(\.colorScheme) private var colorScheme
     @State private var copied = false
+    private var isCLITheme: Bool { theme.id == "cli" }
 
     var body: some View {
         ZStack {
             // Dimmed background
-            Color.black.opacity(0.4)
+            (isCLITheme ? CLITheme.black : Color.black).opacity(isCLITheme ? 0.68 : 0.4)
                 .ignoresSafeArea()
                 .onTapGesture {
                     onDismiss()
@@ -25,11 +26,12 @@ struct SharePassOverlay: View {
                 HStack {
                     Image(systemName: "gift.fill")
                         .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(theme.accentPrimary)
+                        .foregroundStyle(isCLITheme ? theme.statusWarning : theme.accentPrimary)
 
-                    Text("Share Claude Code")
-                        .font(.system(size: 14, weight: .bold, design: theme.fontDesign))
+                    Text(isCLITheme ? "SHARE CLAUDE CODE" : "Share Claude Code")
+                        .font(.system(size: 14, weight: .bold, design: isCLITheme ? .monospaced : theme.fontDesign))
                         .foregroundStyle(theme.textPrimary)
+                        .tracking(isCLITheme ? 0.45 : 0)
 
                     Spacer()
 
@@ -46,7 +48,7 @@ struct SharePassOverlay: View {
                 // Referral Link
                 HStack(spacing: 8) {
                     Text(pass.referralURL.absoluteString)
-                        .font(.system(size: 11, weight: .medium, design: theme.fontDesign))
+                        .font(.system(size: 11, weight: .medium, design: isCLITheme ? .monospaced : theme.fontDesign))
                         .foregroundStyle(theme.textPrimary)
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -65,7 +67,11 @@ struct SharePassOverlay: View {
                 .padding(10)
                 .background(
                     RoundedRectangle(cornerRadius: 8)
-                        .fill(colorScheme == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.04))
+                        .fill(isCLITheme ? AnyShapeStyle(theme.cardGradient) : AnyShapeStyle(colorScheme == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.04)))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(isCLITheme ? theme.glassBorder.opacity(0.9) : Color.clear, lineWidth: 1)
+                        )
                 )
 
                 // Action buttons
@@ -77,7 +83,7 @@ struct SharePassOverlay: View {
                             Image(systemName: copied ? "checkmark" : "doc.on.doc")
                                 .font(.system(size: 11, weight: .semibold))
                             Text(copied ? "Copied!" : "Copy Link")
-                                .font(.system(size: 11, weight: .medium, design: theme.fontDesign))
+                                .font(.system(size: 11, weight: .medium, design: isCLITheme ? .monospaced : theme.fontDesign))
                         }
                         .foregroundStyle(.white)
                         .padding(.horizontal, 14)
@@ -98,16 +104,16 @@ struct SharePassOverlay: View {
                             Image(systemName: "safari")
                                 .font(.system(size: 11, weight: .semibold))
                             Text("Open")
-                                .font(.system(size: 11, weight: .medium, design: theme.fontDesign))
+                                .font(.system(size: 11, weight: .medium, design: isCLITheme ? .monospaced : theme.fontDesign))
                         }
                         .foregroundStyle(theme.textPrimary)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 8)
                         .background(
-                            Capsule()
+                            RoundedRectangle(cornerRadius: isCLITheme ? 10 : 999)
                                 .fill(theme.glassBackground)
                                 .overlay(
-                                    Capsule()
+                                    RoundedRectangle(cornerRadius: isCLITheme ? 10 : 999)
                                         .stroke(theme.glassBorder, lineWidth: 1)
                                 )
                         )
@@ -117,22 +123,19 @@ struct SharePassOverlay: View {
 
                 // Help text
                 Text("Share a free week of Claude Code with friends")
-                    .font(.system(size: 10, weight: .semibold, design: theme.fontDesign))
+                    .font(.system(size: 10, weight: .semibold, design: isCLITheme ? .monospaced : theme.fontDesign))
                     .foregroundStyle(theme.textTertiary)
+                    .tracking(isCLITheme ? 0.15 : 0)
             }
             .padding(16)
             .background(
                 RoundedRectangle(cornerRadius: 14)
-                    .fill(theme.glassBackground)
-                    .background(
-                        RoundedRectangle(cornerRadius: 14)
-                            .fill(colorScheme == .dark ? Color(white: 0.15) : Color(white: 0.95))
-                    )
+                    .fill(isCLITheme ? AnyShapeStyle(theme.cardGradient) : AnyShapeStyle(theme.glassBackground))
                     .overlay(
                         RoundedRectangle(cornerRadius: 14)
                             .stroke(theme.glassBorder, lineWidth: 1)
                     )
-                    .shadow(color: Color.black.opacity(0.4), radius: 20, y: 10)
+                    .shadow(color: (isCLITheme ? theme.accentSecondary : Color.black).opacity(isCLITheme ? 0.12 : 0.4), radius: isCLITheme ? 10 : 20, y: isCLITheme ? 4 : 10)
             )
             .padding(.horizontal, 24)
         }

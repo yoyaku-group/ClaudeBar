@@ -6,10 +6,10 @@ extension ClaudeSession.Phase {
     /// Single source of truth — used by StatusBarIcon, SessionIndicatorView, etc.
     var color: Color {
         switch self {
-        case .active: return .green
-        case .subagentsWorking: return .blue
-        case .stopped: return .orange
-        case .ended: return .gray
+        case .active: return CLITheme.green
+        case .subagentsWorking: return CLITheme.blue
+        case .stopped: return CLITheme.amber
+        case .ended: return CLITheme.gray
         }
     }
 }

@@ -12,6 +12,7 @@ struct CostStatCard: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var isHovering = false
     @State private var animateProgress = false
+    private var isCLITheme: Bool { theme.id == "cli" }
 
     init(costUsage: CostUsage, budget: Decimal? = nil, delay: Double = 0) {
         self.costUsage = costUsage
@@ -46,9 +47,9 @@ struct CostStatCard: View {
                         .foregroundStyle(budgetStatusColor)
 
                     Text("API COST")
-                        .font(.system(size: 8, weight: .semibold, design: theme.fontDesign))
+                        .font(.system(size: 8, weight: .semibold, design: isCLITheme ? .monospaced : theme.fontDesign))
                         .foregroundStyle(theme.textSecondary)
-                        .tracking(0.3)
+                        .tracking(isCLITheme ? 0.7 : 0.3)
                 }
 
                 Spacer(minLength: 4)
@@ -63,7 +64,7 @@ struct CostStatCard: View {
             // Large cost display
             HStack(alignment: .firstTextBaseline, spacing: 2) {
                 Text(costUsage.formattedCost)
-                    .font(.system(size: 28, weight: .heavy, design: theme.fontDesign))
+                    .font(.system(size: 28, weight: .heavy, design: isCLITheme ? .monospaced : theme.fontDesign))
                     .foregroundStyle(theme.textPrimary)
                     .contentTransition(.numericText())
             }
@@ -80,7 +81,7 @@ struct CostStatCard: View {
                         .font(.system(size: 7))
 
                     Text("API Time: \(costUsage.formattedApiDuration)")
-                        .font(.system(size: 9, weight: .semibold, design: theme.fontDesign))
+                        .font(.system(size: 9, weight: .semibold, design: isCLITheme ? .monospaced : theme.fontDesign))
                 }
                 .foregroundStyle(theme.textTertiary)
                 .lineLimit(1)
@@ -90,7 +91,7 @@ struct CostStatCard: View {
                         .font(.system(size: 7))
 
                     Text(resetText)
-                        .font(.system(size: 9, weight: .semibold, design: theme.fontDesign))
+                        .font(.system(size: 9, weight: .semibold, design: isCLITheme ? .monospaced : theme.fontDesign))
                 }
                 .foregroundStyle(theme.textTertiary)
                 .lineLimit(1)
@@ -145,7 +146,7 @@ struct CostStatCard: View {
             // Budget label
             HStack {
                 Text("\(Int(budgetPercentUsed))% of \(formatBudget(budget)) budget")
-                    .font(.system(size: 8, weight: .semibold, design: theme.fontDesign))
+                    .font(.system(size: 8, weight: .semibold, design: isCLITheme ? .monospaced : theme.fontDesign))
                     .foregroundStyle(theme.textTertiary)
 
                 Spacer()
@@ -176,8 +177,8 @@ struct CostStatCard: View {
     private var cardBorderGradient: LinearGradient {
         LinearGradient(
             colors: [
-                theme.glassBorder.opacity(isHovering ? 1.2 : 1.0),
-                theme.glassBorder.opacity(0.3)
+                (isCLITheme ? theme.accentSecondary : theme.glassBorder).opacity(isHovering ? 0.9 : 0.6),
+                theme.glassBorder.opacity(0.28)
             ],
             startPoint: .topLeading,
             endPoint: .bottomTrailing

@@ -146,6 +146,40 @@ struct DefaultCodexRPCClientTests {
     }
 
     @Test
+    func `fetchRateLimits does not fallback for deactivated workspace rpc error`() async throws {
+        let mockTransport = MockRPCTransport()
+        let mockExecutor = MockCLIExecutor()
+        setupMockTransport(mockTransport, rateLimitsResponse: """
+        {"id":2,"error":{"message":"failed to fetch codex rate limits: GET https://chatgpt.com/backend-api/wham/usage failed: 402 Payment Required; body={\\"detail\\":{\\"code\\":\\"deactivated_workspace\\"}}"}} 
+        """)
+
+        let client = DefaultCodexRPCClient(transport: mockTransport, cliExecutor: mockExecutor)
+
+        await #expect(throws: ProbeError.executionFailed("Codex workspace is deactivated. Re-open Codex with an active workspace.")) {
+            try await client.fetchRateLimits()
+        }
+
+        verify(mockExecutor).execute(binary: .any, args: .any, input: .any, timeout: .any, workingDirectory: .any, autoResponses: .any).called(.never)
+    }
+
+    @Test
+    func `fetchRateLimits does not fallback for authentication rpc error`() async throws {
+        let mockTransport = MockRPCTransport()
+        let mockExecutor = MockCLIExecutor()
+        setupMockTransport(mockTransport, rateLimitsResponse: """
+        {"id":2,"error":{"message":"Authentication required"}}
+        """)
+
+        let client = DefaultCodexRPCClient(transport: mockTransport, cliExecutor: mockExecutor)
+
+        await #expect(throws: ProbeError.authenticationRequired) {
+            try await client.fetchRateLimits()
+        }
+
+        verify(mockExecutor).execute(binary: .any, args: .any, input: .any, timeout: .any, workingDirectory: .any, autoResponses: .any).called(.never)
+    }
+
+    @Test
     func `fetchRateLimits throws when result missing and TTY fallback fails`() async throws {
         // Given - response without result, TTY fallback also fails
         let mockTransport = MockRPCTransport()

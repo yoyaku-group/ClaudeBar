@@ -401,6 +401,7 @@ enum AppTheme {
 
 struct AdaptiveGlassCardStyle: ViewModifier {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.themeMode) private var themeMode
     var cornerRadius: CGFloat = 16
     var padding: CGFloat = 12
 
@@ -409,40 +410,62 @@ struct AdaptiveGlassCardStyle: ViewModifier {
             .padding(padding)
             .background(
                 ZStack {
-                    // Base glass layer
-                    RoundedRectangle(cornerRadius: cornerRadius)
-                        .fill(AppTheme.cardGradient(for: colorScheme))
-
-                    // Shadow for light mode depth
-                    if colorScheme == .light {
+                    if themeMode.isCLI {
                         RoundedRectangle(cornerRadius: cornerRadius)
-                            .fill(Color.clear)
-                            .shadow(
-                                color: AppTheme.glassShadow(for: colorScheme),
-                                radius: 8,
-                                x: 0,
-                                y: 4
+                            .fill(CLITheme.cardGradient)
+
+                        RoundedRectangle(cornerRadius: cornerRadius)
+                            .stroke(CLITheme.glassBorder.opacity(0.92), lineWidth: 1)
+
+                        RoundedRectangle(cornerRadius: cornerRadius)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [
+                                        CLITheme.glassHighlight,
+                                        Color.clear,
+                                        Color.clear
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                ),
+                                lineWidth: 1
+                            )
+                    } else {
+                        // Base glass layer
+                        RoundedRectangle(cornerRadius: cornerRadius)
+                            .fill(AppTheme.cardGradient(for: colorScheme))
+
+                        // Shadow for light mode depth
+                        if colorScheme == .light {
+                            RoundedRectangle(cornerRadius: cornerRadius)
+                                .fill(Color.clear)
+                                .shadow(
+                                    color: AppTheme.glassShadow(for: colorScheme),
+                                    radius: 8,
+                                    x: 0,
+                                    y: 4
+                                )
+                        }
+
+                        // Inner border
+                        RoundedRectangle(cornerRadius: cornerRadius)
+                            .stroke(AppTheme.glassBorder(for: colorScheme), lineWidth: 1)
+
+                        // Top edge shine
+                        RoundedRectangle(cornerRadius: cornerRadius)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [
+                                        AppTheme.glassHighlight(for: colorScheme),
+                                        Color.clear,
+                                        Color.clear
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                ),
+                                lineWidth: 1
                             )
                     }
-
-                    // Inner border
-                    RoundedRectangle(cornerRadius: cornerRadius)
-                        .stroke(AppTheme.glassBorder(for: colorScheme), lineWidth: 1)
-
-                    // Top edge shine
-                    RoundedRectangle(cornerRadius: cornerRadius)
-                        .stroke(
-                            LinearGradient(
-                                colors: [
-                                    AppTheme.glassHighlight(for: colorScheme),
-                                    Color.clear,
-                                    Color.clear
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            ),
-                            lineWidth: 1
-                        )
                 }
             )
     }
@@ -538,22 +561,32 @@ extension View {
 
 struct BadgeStyle: ViewModifier {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.themeMode) private var themeMode
     let color: Color
 
     func body(content: Content) -> some View {
         content
-            .font(AppTheme.captionFont(size: 8))
-            .foregroundStyle(colorScheme == .dark ? .white : .white)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
+            .font(themeMode.isCLI ? .system(size: 8, weight: .bold, design: .monospaced) : AppTheme.captionFont(size: 8))
+            .foregroundStyle(.white)
+            .tracking(themeMode.isCLI ? 0.5 : 0)
+            .padding(.horizontal, themeMode.isCLI ? 7 : 6)
+            .padding(.vertical, themeMode.isCLI ? 3 : 2)
             .background(
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(color.opacity(colorScheme == .dark ? 0.9 : 0.85))
-                    .shadow(
-                        color: colorScheme == .light ? color.opacity(0.3) : .clear,
-                        radius: 2,
-                        y: 1
-                    )
+                ZStack {
+                    RoundedRectangle(cornerRadius: themeMode.isCLI ? 5 : 4)
+                        .fill(color.opacity(themeMode.isCLI ? 0.82 : (colorScheme == .dark ? 0.9 : 0.85)))
+
+                    RoundedRectangle(cornerRadius: themeMode.isCLI ? 5 : 4)
+                        .stroke(
+                            themeMode.isCLI ? color.opacity(0.95) : Color.clear,
+                            lineWidth: themeMode.isCLI ? 1 : 0
+                        )
+                        .shadow(
+                            color: colorScheme == .light ? color.opacity(0.3) : .clear,
+                            radius: 2,
+                            y: 1
+                        )
+                }
             )
             .fixedSize()
     }
@@ -776,9 +809,9 @@ extension QuotaStatus {
     /// Simple display color for status indicators (moved from Domain to keep Domain SwiftUI-free)
     var displayColor: Color {
         switch self {
-        case .healthy: .green
-        case .warning: .orange
-        case .critical, .depleted: .red
+        case .healthy: CLITheme.green
+        case .warning: CLITheme.amber
+        case .critical, .depleted: CLITheme.red
         }
     }
 }
@@ -789,10 +822,10 @@ extension UsagePace {
     /// Display color for pace indicators
     var displayColor: Color {
         switch self {
-        case .onPace: .green
-        case .ahead: .orange
-        case .behind: AppTheme.tealBright
-        case .unknown: .secondary
+        case .onPace: CLITheme.green
+        case .ahead: CLITheme.amber
+        case .behind: CLITheme.cyan
+        case .unknown: CLITheme.gray
         }
     }
 
@@ -822,9 +855,9 @@ extension BudgetStatus {
     /// Simple display color for status indicators
     var displayColor: Color {
         switch self {
-        case .withinBudget: .green
-        case .approachingLimit: .orange
-        case .overBudget: .red
+        case .withinBudget: CLITheme.green
+        case .approachingLimit: CLITheme.amber
+        case .overBudget: CLITheme.red
         }
     }
 }
@@ -903,7 +936,4 @@ extension View {
         modifier(ThemeProvider(themeMode: mode))
     }
 }
-
-
-
 

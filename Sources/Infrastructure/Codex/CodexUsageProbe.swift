@@ -157,7 +157,7 @@ public struct CodexUsageProbe: UsageProbe {
         for (idx, line) in lines.enumerated() where line.lowercased().contains(label) {
             let window = lines.dropFirst(idx).prefix(12)
             for candidate in window {
-                if let pct = percentFromLine(candidate) {
+                if let pct = percentRemainingFromLine(candidate) {
                     return pct
                 }
             }
@@ -165,18 +165,27 @@ public struct CodexUsageProbe: UsageProbe {
         return nil
     }
 
-    private static func percentFromLine(_ line: String) -> Int? {
-        let pattern = #"([0-9]{1,3})%\s+left"#
+    private static func percentRemainingFromLine(_ line: String) -> Int? {
+        let pattern = #"([0-9]{1,3})%\s+(left|used|remaining)"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
             return nil
         }
         let range = NSRange(line.startIndex..<line.endIndex, in: line)
         guard let match = regex.firstMatch(in: line, options: [], range: range),
-              match.numberOfRanges >= 2,
-              let valRange = Range(match.range(at: 1), in: line) else {
+              match.numberOfRanges >= 3,
+              let valRange = Range(match.range(at: 1), in: line),
+              let qualifierRange = Range(match.range(at: 2), in: line),
+              let value = Int(line[valRange]) else {
             return nil
         }
-        return Int(line[valRange])
+
+        let qualifier = line[qualifierRange].lowercased()
+        switch qualifier {
+        case "used":
+            return max(0, 100 - value)
+        default:
+            return value
+        }
     }
 
     internal static func extractUsageError(_ text: String) -> ProbeError? {
@@ -197,7 +206,16 @@ public struct CodexUsageProbe: UsageProbe {
             return .authenticationRequired
         }
 
+        if lower.contains("missing optional dependency @openai/codex") {
+            AppLog.probes.error("Codex probe failed: CLI installation is broken")
+            return .executionFailed("Codex CLI installation is broken. Reinstall Codex: npm install -g @openai/codex@latest")
+        }
+
+        if lower.contains("deactivated_workspace") {
+            AppLog.probes.error("Codex probe failed: workspace is deactivated")
+            return .executionFailed("Codex workspace is deactivated. Re-open Codex with an active workspace.")
+        }
+
         return nil
     }
 }
-

@@ -194,7 +194,12 @@ public final class UserDefaultsProviderSettingsRepository: ZaiSettingsRepository
 
     public func codexProbeMode() -> CodexProbeMode {
         guard let rawValue = userDefaults.string(forKey: Keys.codexProbeMode) else {
-            return .rpc // Default to RPC mode
+            // Prefer API mode when Codex OAuth credentials are available.
+            // This exposes OpenAI/Codex balance data in addition to quota windows.
+            if CodexCredentialLoader().loadCredentials() != nil {
+                return .api
+            }
+            return .rpc
         }
         return CodexProbeMode(rawValue: rawValue) ?? .rpc
     }

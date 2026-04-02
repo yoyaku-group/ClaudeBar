@@ -11,13 +11,17 @@ struct ProviderIconView: View {
 
     @Environment(\.appTheme) private var theme
     @Environment(\.colorScheme) private var colorScheme
+    private var isCLITheme: Bool { theme.id == "cli" }
 
     var body: some View {
         ZStack {
             if showGlow {
                 // Subtle glow behind icon - adapts to theme
                 Circle()
-                    .fill(ProviderVisualIdentityLookup.color(for: providerId, scheme: colorScheme).opacity(colorScheme == .dark ? 0.3 : 0.2))
+                    .fill(
+                        (isCLITheme ? theme.accentSecondary : ProviderVisualIdentityLookup.color(for: providerId, scheme: colorScheme))
+                            .opacity(isCLITheme ? 0.12 : (colorScheme == .dark ? 0.3 : 0.2))
+                    )
                     .frame(width: size * 1.3, height: size * 1.3)
                     .blur(radius: size * 0.3)
             }
@@ -32,17 +36,21 @@ struct ProviderIconView: View {
                     .overlay(
                         Circle()
                             .stroke(
-                                colorScheme == .dark
-                                    ? Color.white.opacity(0.6)
-                                    : theme.accentPrimary.opacity(0.3),
-                                lineWidth: 2
+                                isCLITheme
+                                    ? theme.glassBorder.opacity(0.95)
+                                    : (colorScheme == .dark
+                                        ? Color.white.opacity(0.6)
+                                        : theme.accentPrimary.opacity(0.3)),
+                                lineWidth: isCLITheme ? 1.2 : 2
                             )
                     )
                     .shadow(
-                        color: colorScheme == .dark
-                            ? .black.opacity(0.15)
-                            : theme.accentPrimary.opacity(0.15),
-                        radius: 3,
+                        color: isCLITheme
+                            ? theme.accentPrimary.opacity(0.08)
+                            : (colorScheme == .dark
+                                ? .black.opacity(0.15)
+                                : theme.accentPrimary.opacity(0.15)),
+                        radius: isCLITheme ? 2 : 3,
                         y: 1
                     )
             } else {
@@ -59,17 +67,21 @@ struct ProviderIconView: View {
                 .overlay(
                     Circle()
                         .stroke(
-                            colorScheme == .dark
-                                ? Color.white.opacity(0.6)
-                                : ProviderVisualIdentityLookup.color(for: providerId, scheme: colorScheme).opacity(0.3),
-                            lineWidth: 2
+                            isCLITheme
+                                ? theme.glassBorder.opacity(0.95)
+                                : (colorScheme == .dark
+                                    ? Color.white.opacity(0.6)
+                                    : ProviderVisualIdentityLookup.color(for: providerId, scheme: colorScheme).opacity(0.3)),
+                            lineWidth: isCLITheme ? 1.2 : 2
                         )
                 )
                 .shadow(
-                    color: colorScheme == .dark
-                        ? .black.opacity(0.15)
-                        : ProviderVisualIdentityLookup.color(for: providerId, scheme: colorScheme).opacity(0.15),
-                    radius: 3,
+                    color: isCLITheme
+                        ? theme.accentPrimary.opacity(0.08)
+                        : (colorScheme == .dark
+                            ? .black.opacity(0.15)
+                            : ProviderVisualIdentityLookup.color(for: providerId, scheme: colorScheme).opacity(0.15)),
+                    radius: isCLITheme ? 2 : 3,
                     y: 1
                 )
             }

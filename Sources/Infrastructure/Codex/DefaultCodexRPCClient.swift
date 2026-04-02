@@ -45,6 +45,10 @@ public final class DefaultCodexRPCClient: CodexRPCClient, @unchecked Sendable {
         do {
             return try await fetchViaRPC()
         } catch {
+            if let probeError = classifyRPCError(error) {
+                AppLog.probes.error("Codex RPC failed with non-recoverable error: \(probeError.localizedDescription)")
+                throw probeError
+            }
             AppLog.probes.warning("Codex RPC failed: \(error.localizedDescription), trying TTY fallback...")
             return try await fetchViaTTY()
         }
@@ -180,7 +184,7 @@ public final class DefaultCodexRPCClient: CodexRPCClient, @unchecked Sendable {
         for (idx, line) in lines.enumerated() where line.lowercased().contains(label) {
             let window = lines.dropFirst(idx).prefix(12)
             for candidate in window {
-                if let pct = ttyPercentFromLine(candidate) {
+                if let pct = ttyPercentRemainingFromLine(candidate) {
                     return pct
                 }
             }
@@ -188,18 +192,67 @@ public final class DefaultCodexRPCClient: CodexRPCClient, @unchecked Sendable {
         return nil
     }
 
-    private func ttyPercentFromLine(_ line: String) -> Int? {
-        let pattern = #"([0-9]{1,3})%\s+left"#
+    private func ttyPercentRemainingFromLine(_ line: String) -> Int? {
+        let pattern = #"([0-9]{1,3})%\s+(left|used|remaining)"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
             return nil
         }
         let range = NSRange(line.startIndex..<line.endIndex, in: line)
         guard let match = regex.firstMatch(in: line, options: [], range: range),
-              match.numberOfRanges >= 2,
-              let valRange = Range(match.range(at: 1), in: line) else {
+              match.numberOfRanges >= 3,
+              let valRange = Range(match.range(at: 1), in: line),
+              let qualifierRange = Range(match.range(at: 2), in: line),
+              let value = Int(line[valRange]) else {
             return nil
         }
-        return Int(line[valRange])
+
+        let qualifier = line[qualifierRange].lowercased()
+        switch qualifier {
+        case "used":
+            return max(0, 100 - value)
+        default:
+            return value
+        }
+    }
+
+    private func classifyRPCError(_ error: Error) -> ProbeError? {
+        if let probeError = error as? ProbeError {
+            switch probeError {
+            case let .executionFailed(message):
+                return classifyRPCExecutionFailure(message) ?? probeError
+            case .authenticationRequired, .sessionExpired, .updateRequired, .subscriptionRequired:
+                return probeError
+            default:
+                return nil
+            }
+        }
+        return nil
+    }
+
+    private func classifyRPCExecutionFailure(_ message: String) -> ProbeError? {
+        let lower = message.lowercased()
+
+        if lower.contains("deactivated_workspace") {
+            return .executionFailed("Codex workspace is deactivated. Re-open Codex with an active workspace.")
+        }
+
+        if lower.contains("payment required") {
+            return .subscriptionRequired
+        }
+
+        if lower.contains("authentication required") || lower.contains("not logged in") {
+            return .authenticationRequired
+        }
+
+        if lower.contains("update available") {
+            return .updateRequired
+        }
+
+        if lower.contains("process closed unexpectedly") || lower.contains("invalid rate limits response") || lower.contains("no rate limits in response") {
+            return nil
+        }
+
+        return nil
     }
 
     // MARK: - Parsing Helpers

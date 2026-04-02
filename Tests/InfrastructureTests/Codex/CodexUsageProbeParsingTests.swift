@@ -40,6 +40,20 @@ struct CodexUsageProbeParsingTests {
     Credits: 500.00
     """
 
+    static let usedFormatOutput = """
+    Codex v1.2.0
+
+    5h limit
+    █████████████░░░░░░░ 62% used
+
+    Weekly limit
+    ███░░░░░░░░░░░░░░░░░ 5% used
+    """
+
+    static let missingDependencyOutput = """
+    Error: Missing optional dependency @openai/codex-darwin-x64. Reinstall Codex: npm install -g @openai/codex@latest
+    """
+
     // MARK: - Parsing Percentages
 
     @Test
@@ -93,6 +107,14 @@ struct CodexUsageProbeParsingTests {
         }
     }
 
+    @Test
+    func `parses used percentages by converting to remaining`() throws {
+        let snapshot = try simulateParse(text: Self.usedFormatOutput)
+
+        #expect(snapshot.sessionQuota?.percentRemaining == 38)
+        #expect(snapshot.weeklyQuota?.percentRemaining == 95)
+    }
+
     // MARK: - Error Detection
 
     static let updateRequiredOutput = """
@@ -123,6 +145,13 @@ struct CodexUsageProbeParsingTests {
         // When & Then
         #expect(throws: ProbeError.self) {
             try simulateParse(text: output)
+        }
+    }
+
+    @Test
+    func `detects missing codex dependency and throws execution error`() throws {
+        #expect(throws: ProbeError.executionFailed("Codex CLI installation is broken. Reinstall Codex: npm install -g @openai/codex@latest")) {
+            try simulateParse(text: Self.missingDependencyOutput)
         }
     }
 

@@ -5,6 +5,12 @@ import Infrastructure
 import Sparkle
 #endif
 
+private extension Font {
+    static func terminal(_ size: CGFloat, weight: Weight = .regular) -> Font {
+        .system(size: size, weight: weight, design: .monospaced)
+    }
+}
+
 /// The main menu content view with adaptive theme support via AppThemeProvider.
 /// Uses the pluggable theme system for consistent styling across all themes.
 struct MenuContentView: View {
@@ -230,6 +236,8 @@ struct MenuContentView: View {
     // MARK: - Header
 
     private var headerView: some View {
+        let isCLITheme = theme.id == "cli"
+
         HStack(spacing: 12) {
             // Custom Provider Icon - shows AppLogo in overview mode, provider icon otherwise
             // Avoid animation on provider icon to prevent constraint update loops in MenuBarExtra
@@ -242,9 +250,9 @@ struct MenuContentView: View {
                         .clipShape(Circle())
                         .overlay(
                             Circle()
-                                .stroke(theme.accentPrimary.opacity(0.3), lineWidth: 2)
+                                .stroke(isCLITheme ? theme.glassBorder.opacity(0.9) : theme.accentPrimary.opacity(0.3), lineWidth: isCLITheme ? 1.2 : 2)
                         )
-                        .shadow(color: theme.accentPrimary.opacity(0.15), radius: 3, y: 1)
+                        .shadow(color: isCLITheme ? theme.accentPrimary.opacity(0.08) : theme.accentPrimary.opacity(0.15), radius: 3, y: 1)
                 } else {
                     ProviderIconView(providerId: selectedProviderId, size: 38)
                 }
@@ -261,8 +269,9 @@ struct MenuContentView: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {
                     Text("ClaudeBar")
-                        .font(.system(size: 18, weight: .bold, design: theme.fontDesign))
+                        .font(theme.id == "cli" ? .terminal(23, weight: .bold) : .system(size: 18, weight: .bold, design: theme.fontDesign))
                         .foregroundStyle(theme.textPrimary)
+                        .tracking(theme.id == "cli" ? -0.4 : 0)
 
                     // Christmas gift icon
                     if theme.id == "christmas" {
@@ -273,8 +282,9 @@ struct MenuContentView: View {
                 }
 
                 Text(headerSubtitle)
-                    .font(.system(size: 11, weight: .medium, design: theme.fontDesign))
+                    .font(theme.id == "cli" ? .terminal(11, weight: .semibold) : .system(size: 11, weight: .medium, design: theme.fontDesign))
                     .foregroundStyle(theme.id == "cli" ? theme.accentPrimary : theme.textSecondary)
+                    .tracking(theme.id == "cli" ? 0.4 : 0)
             }
 
             Spacer()
@@ -282,13 +292,14 @@ struct MenuContentView: View {
             // Status Badge
             statusBadge
         }
+        .padding(.bottom, isCLITheme ? 4 : 0)
         .opacity(animateIn ? 1 : 0)
         .offset(y: animateIn ? 0 : -10)
     }
 
     private var headerSubtitle: String {
         switch theme.id {
-        case "cli": return "> usage monitor"
+        case "cli": return "> OPENAI USAGE / CODEX"
         case "christmas": return "Happy Holidays!"
         default: return "AI Usage Monitor"
         }
@@ -306,6 +317,7 @@ struct MenuContentView: View {
 
     private var statusBadge: some View {
         let statusColor = theme.statusColor(for: selectedProviderStatus)
+        let isCLITheme = theme.id == "cli"
 
         return HStack(spacing: 6) {
             // Animated pulse dot
@@ -315,8 +327,9 @@ struct MenuContentView: View {
             )
 
             Text(statusText)
-                .font(.system(size: 11, weight: .medium, design: theme.fontDesign))
+                .font(theme.id == "cli" ? .terminal(11, weight: .bold) : .system(size: 11, weight: .medium, design: theme.fontDesign))
                 .foregroundStyle(theme.textPrimary)
+                .tracking(theme.id == "cli" ? 0.5 : 0)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
@@ -325,14 +338,21 @@ struct MenuContentView: View {
                 .fill(theme.glassBackground)
                 .overlay(
                     RoundedRectangle(cornerRadius: theme.pillCornerRadius)
-                        .stroke(statusColor.opacity(0.5), lineWidth: 1)
+                        .stroke(statusColor.opacity(isCLITheme ? 0.9 : 0.5), lineWidth: 1)
                 )
         )
+        .overlay(alignment: .topLeading) {
+            if isCLITheme {
+                RoundedRectangle(cornerRadius: theme.pillCornerRadius)
+                    .stroke(theme.accentSecondary.opacity(0.18), lineWidth: 1)
+                    .blur(radius: 0.2)
+            }
+        }
     }
 
     private var statusText: String {
-        if isSelectedProviderSyncing { return "Syncing..." }
-        return selectedProviderStatus.badgeText
+        if isSelectedProviderSyncing { return theme.id == "cli" ? "SYNCING" : "Syncing..." }
+        return theme.id == "cli" ? selectedProviderStatus.badgeText.uppercased() : selectedProviderStatus.badgeText
     }
 
     /// Help text for settings button, includes update info if available
@@ -473,41 +493,51 @@ struct MenuContentView: View {
 
 
     private func accountCard(displayName: String, snapshot: UsageSnapshot) -> some View {
+        let isCLITheme = theme.id == "cli"
+
         HStack(spacing: 10) {
             // Avatar circle
             ZStack {
                 Circle()
-                    .fill(ProviderVisualIdentityLookup.gradient(for: selectedProviderId, scheme: colorScheme))
+                    .fill(isCLITheme ? AnyShapeStyle(theme.pillGradient) : AnyShapeStyle(ProviderVisualIdentityLookup.gradient(for: selectedProviderId, scheme: colorScheme)))
                     .frame(width: 32, height: 32)
+                    .overlay(
+                        Circle()
+                            .stroke(isCLITheme ? theme.glassBorder.opacity(0.9) : Color.clear, lineWidth: 1)
+                    )
 
                 Text(String(displayName.prefix(1)).uppercased())
-                    .font(.system(size: 14, weight: .bold, design: theme.fontDesign))
-                    .foregroundStyle(.white)
+                    .font(.system(size: 14, weight: .bold, design: isCLITheme ? .monospaced : theme.fontDesign))
+                    .foregroundStyle(isCLITheme ? theme.textPrimary : .white)
             }
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(displayName)
-                        .font(.system(size: 12, weight: .medium, design: theme.fontDesign))
+                        .font(.system(size: 12, weight: .medium, design: isCLITheme ? .monospaced : theme.fontDesign))
                         .foregroundStyle(theme.textPrimary)
                         .lineLimit(1)
 
                     // Account tier badge
                     if let accountTier = snapshot.accountTier {
                         Text(accountTier.badgeText)
-                            .font(.system(size: 8, weight: .semibold, design: theme.fontDesign))
+                            .font(.system(size: 8, weight: .semibold, design: isCLITheme ? .monospaced : theme.fontDesign))
                             .foregroundStyle(.white)
                             .padding(.horizontal, 5)
                             .padding(.vertical, 2)
                             .background(
-                                Capsule()
+                                RoundedRectangle(cornerRadius: isCLITheme ? 5 : 999)
                                     .fill(theme.accentPrimary.opacity(0.8))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: isCLITheme ? 5 : 999)
+                                            .stroke(isCLITheme ? theme.accentSecondary.opacity(0.5) : Color.clear, lineWidth: 1)
+                                    )
                             )
                     }
                 }
 
                 Text("Updated \(snapshot.ageDescription)")
-                    .font(.system(size: 10, weight: .semibold, design: theme.fontDesign))
+                    .font(.system(size: 10, weight: .semibold, design: isCLITheme ? .monospaced : theme.fontDesign))
                     .foregroundStyle(theme.textTertiary)
             }
 
@@ -572,12 +602,12 @@ struct MenuContentView: View {
             }
 
             Text("\(selectedProvider?.name ?? selectedProviderId) Unavailable")
-                .font(.system(size: 14, weight: .bold, design: theme.fontDesign))
+                .font(theme.id == "cli" ? .terminal(14, weight: .bold) : .system(size: 14, weight: .bold, design: theme.fontDesign))
                 .foregroundStyle(theme.textPrimary)
 
             // Show actual error message if available, otherwise generic message
-            Text(selectedProvider?.lastError?.localizedDescription ?? "Install CLI or check configuration")
-                .font(.system(size: 11, weight: .semibold, design: theme.fontDesign))
+            Text(emptyStateMessage)
+                .font(theme.id == "cli" ? .terminal(11, weight: .medium) : .system(size: 11, weight: .semibold, design: theme.fontDesign))
                 .foregroundStyle(theme.textTertiary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 16)
@@ -585,6 +615,18 @@ struct MenuContentView: View {
         .frame(height: 140)
         .frame(maxWidth: .infinity)
         .glassCard()
+    }
+
+    private var emptyStateMessage: String {
+        if let error = selectedProvider?.lastError?.localizedDescription {
+            return error
+        }
+
+        if selectedProviderId == "codex" {
+            return "Switch Codex to API mode to display OpenAI credits and usage."
+        }
+
+        return "Install CLI or check configuration"
     }
 
     // MARK: - Action Bar
@@ -765,34 +807,48 @@ struct ProviderPill: View {
 
     @Environment(\.appTheme) private var theme
     @State private var isHovering = false
+    private var isCLITheme: Bool { theme.id == "cli" }
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 4) {
+            HStack(spacing: 6) {
+                if isCLITheme && isSelected {
+                    Text(">")
+                        .font(.terminal(11, weight: .bold))
+                        .foregroundStyle(theme.accentPrimary)
+                }
+
                 Image(systemName: providerIcon)
                     .font(.system(size: 10, weight: .semibold))
 
                 Text(providerName)
-                    .font(.system(size: 11, weight: .medium, design: theme.fontDesign))
+                    .font(isCLITheme ? .terminal(11, weight: isSelected ? .bold : .semibold) : .system(size: 11, weight: .medium, design: theme.fontDesign))
                     .lineLimit(1)
                     .fixedSize()
+                    .tracking(isCLITheme ? 0.2 : 0)
             }
-            .foregroundStyle(isSelected ? (theme.id == "cli" ? theme.textPrimary : .white) : theme.textPrimary)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
+            .foregroundStyle(isSelected ? (isCLITheme ? theme.textPrimary : .white) : theme.textPrimary)
+            .padding(.horizontal, isCLITheme ? 12 : 10)
+            .padding(.vertical, isCLITheme ? 8 : 6)
             .background(
                 ZStack {
                     if isSelected {
                         RoundedRectangle(cornerRadius: theme.pillCornerRadius)
-                            .fill(theme.accentGradient)
-                            .shadow(color: theme.accentPrimary.opacity(0.3), radius: 6, y: 2)
+                            .fill(isCLITheme ? theme.pillGradient : theme.accentGradient)
+                            .shadow(color: theme.accentPrimary.opacity(isCLITheme ? 0.18 : 0.3), radius: isCLITheme ? 3 : 6, y: 2)
                     } else {
                         RoundedRectangle(cornerRadius: theme.pillCornerRadius)
                             .fill(isHovering ? theme.hoverOverlay : theme.glassBackground)
                     }
 
                     RoundedRectangle(cornerRadius: theme.pillCornerRadius)
-                        .stroke(isSelected ? theme.accentPrimary.opacity(0.5) : theme.glassBorder, lineWidth: 1)
+                        .stroke(isSelected ? theme.accentPrimary.opacity(isCLITheme ? 0.9 : 0.5) : theme.glassBorder, lineWidth: 1)
+
+                    if isCLITheme && isSelected {
+                        RoundedRectangle(cornerRadius: theme.pillCornerRadius)
+                            .stroke(theme.accentSecondary.opacity(0.35), lineWidth: 1)
+                            .padding(1)
+                    }
                 }
             )
         }
@@ -815,6 +871,7 @@ struct WrappedStatCard: View {
     @State private var isHovering = false
     @State private var animateProgress = false
     @State private var settings = AppSettings.shared
+    private var isCLITheme: Bool { theme.id == "cli" }
 
     private var displayMode: UsageDisplayMode {
         settings.usageDisplayMode
@@ -838,7 +895,7 @@ struct WrappedStatCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: isCLITheme ? 7 : 6) {
             // Header row with icon, type, and badge
             HStack(alignment: .top, spacing: 0) {
                 // Left side: icon and type label
@@ -848,9 +905,9 @@ struct WrappedStatCard: View {
                         .foregroundStyle(statusColor)
 
                     Text(quota.quotaType.displayName.uppercased())
-                        .font(.system(size: 8, weight: .medium, design: theme.fontDesign))
+                        .font(isCLITheme ? .terminal(8, weight: .bold) : .system(size: 8, weight: .medium, design: theme.fontDesign))
                         .foregroundStyle(theme.textSecondary)
-                        .tracking(0.3)
+                        .tracking(isCLITheme ? 0.8 : 0.3)
                 }
 
                 Spacer(minLength: 4)
@@ -869,20 +926,21 @@ struct WrappedStatCard: View {
             HStack(alignment: .firstTextBaseline) {
                 HStack(alignment: .firstTextBaseline, spacing: 1) {
                     Text("\(Int(quota.displayPercent(mode: effectiveDisplayMode)))")
-                        .font(.system(size: 32, weight: .bold, design: theme.fontDesign))
+                        .font(isCLITheme ? .terminal(34, weight: .bold) : .system(size: 32, weight: .bold, design: theme.fontDesign))
                         .foregroundStyle(effectiveDisplayMode == .pace ? paceColor : theme.textPrimary)
                         .contentTransition(.numericText())
 
                     Text("%")
-                        .font(.system(size: 16, weight: .medium, design: theme.fontDesign))
+                        .font(isCLITheme ? .terminal(15, weight: .semibold) : .system(size: 16, weight: .medium, design: theme.fontDesign))
                         .foregroundStyle(effectiveDisplayMode == .pace ? paceColor.opacity(0.7) : theme.textTertiary)
                 }
 
                 Spacer()
 
                 Text(effectiveDisplayMode.displayLabel)
-                    .font(.system(size: 12, weight: .medium, design: theme.fontDesign))
+                    .font(isCLITheme ? .terminal(11, weight: .semibold) : .system(size: 12, weight: .medium, design: theme.fontDesign))
                     .foregroundStyle(effectiveDisplayMode == .pace ? paceColor.opacity(0.8) : theme.textTertiary)
+                    .tracking(isCLITheme ? 0.5 : 0)
             }
 
             // Pace insight line
@@ -891,7 +949,7 @@ struct WrappedStatCard: View {
                     Image(systemName: "lightbulb.fill")
                         .font(.system(size: 7))
                     Text(insight)
-                        .font(.system(size: 8, weight: .medium, design: theme.fontDesign))
+                        .font(isCLITheme ? .terminal(8, weight: .semibold) : .system(size: 8, weight: .medium, design: theme.fontDesign))
                 }
                 .foregroundStyle(paceColor.opacity(0.8))
                 .lineLimit(1)
@@ -903,17 +961,21 @@ struct WrappedStatCard: View {
                     let progressPercent = quota.displayProgressPercent(mode: effectiveDisplayMode)
                     ZStack(alignment: .leading) {
                         // Track
-                        RoundedRectangle(cornerRadius: 3)
+                        RoundedRectangle(cornerRadius: isCLITheme ? 2 : 3)
                             .fill(theme.progressTrack)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: isCLITheme ? 2 : 3)
+                                    .stroke(isCLITheme ? theme.glassBorder.opacity(0.30) : Color.clear, lineWidth: 1)
+                            )
 
                         // Fill (clamp width to 0-100%)
-                        RoundedRectangle(cornerRadius: 3)
+                        RoundedRectangle(cornerRadius: isCLITheme ? 2 : 3)
                             .fill(theme.progressGradient(for: quota.percentRemaining))
                             .frame(width: animateProgress ? geo.size.width * max(0, min(100, progressPercent)) / 100 : 0)
                             .animation(.spring(response: 0.8, dampingFraction: 0.7).delay(delay + 0.2), value: animateProgress)
                     }
                 }
-                .frame(height: 5)
+                .frame(height: isCLITheme ? 6 : 5)
 
                 // Expected pace tick mark
                 if let expectedPercent = quota.expectedProgressPercent(mode: effectiveDisplayMode) {
@@ -925,7 +987,7 @@ struct WrappedStatCard: View {
                             path.addLine(to: CGPoint(x: tickX, y: 0))
                             path.closeSubpath()
                         }
-                        .fill(theme.textTertiary)
+                        .fill(isCLITheme ? theme.accentSecondary.opacity(0.8) : theme.textTertiary)
                         .opacity(animateProgress ? 1 : 0)
                         .animation(.easeIn(duration: 0.3).delay(delay + 0.5), value: animateProgress)
                     }
@@ -940,20 +1002,26 @@ struct WrappedStatCard: View {
                         .font(.system(size: 7))
 
                     Text(resetText)
-                        .font(.system(size: 8, weight: .medium, design: theme.fontDesign))
+                        .font(isCLITheme ? .terminal(8, weight: .medium) : .system(size: 8, weight: .medium, design: theme.fontDesign))
                 }
                 .foregroundStyle(theme.textTertiary)
                 .lineLimit(1)
             }
         }
-        .padding(12)
+        .padding(isCLITheme ? 13 : 12)
         .background(
             ZStack {
                 RoundedRectangle(cornerRadius: theme.cardCornerRadius)
                     .fill(theme.cardGradient)
 
                 RoundedRectangle(cornerRadius: theme.cardCornerRadius)
-                    .stroke(theme.glassBorder, lineWidth: 1)
+                    .stroke(isCLITheme ? statusColor.opacity(0.35) : theme.glassBorder, lineWidth: 1)
+
+                if isCLITheme {
+                    RoundedRectangle(cornerRadius: theme.cardCornerRadius)
+                        .stroke(theme.glassBorder.opacity(0.35), lineWidth: 1)
+                        .padding(1)
+                }
             }
         )
         .scaleEffect(isHovering ? 1.015 : 1.0)
@@ -979,6 +1047,7 @@ struct WrappedStatCard: View {
 struct LoadingSpinnerView: View {
     @Environment(\.appTheme) private var theme
     @State private var isSpinning = false
+    private var isCLITheme: Bool { theme.id == "cli" }
 
     var body: some View {
         VStack(spacing: 16) {
@@ -1002,8 +1071,9 @@ struct LoadingSpinnerView: View {
             }
 
             Text("Fetching usage data...")
-                .font(.system(size: 13, weight: .medium, design: theme.fontDesign))
+                .font(.system(size: 13, weight: .medium, design: isCLITheme ? .monospaced : theme.fontDesign))
                 .foregroundStyle(theme.textSecondary)
+                .tracking(isCLITheme ? 0.3 : 0)
         }
         .frame(height: 140)
         .frame(maxWidth: .infinity)
@@ -1025,6 +1095,7 @@ struct WrappedActionButton: View {
 
     @Environment(\.appTheme) private var theme
     @State private var isHovering = false
+    private var isCLITheme: Bool { theme.id == "cli" }
 
     var body: some View {
         Button(action: action) {
@@ -1040,22 +1111,29 @@ struct WrappedActionButton: View {
                 }
 
                 Text(label)
-                    .font(.system(size: 12, weight: .medium, design: theme.fontDesign))
+                    .font(isCLITheme ? .terminal(12, weight: .bold) : .system(size: 12, weight: .medium, design: theme.fontDesign))
                     .fixedSize()
+                    .tracking(isCLITheme ? 0.4 : 0)
             }
             .foregroundStyle(isHovering ? .white : theme.textPrimary)
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
             .background(
                 ZStack {
-                    Capsule()
-                        .fill(isHovering ? AnyShapeStyle(gradient) : AnyShapeStyle(theme.glassBackground))
+                    RoundedRectangle(cornerRadius: isCLITheme ? 10 : 999)
+                        .fill(isHovering ? AnyShapeStyle(isCLITheme ? theme.pillGradient : gradient) : AnyShapeStyle(theme.glassBackground))
 
-                    Capsule()
-                        .stroke(theme.glassBorder, lineWidth: 1)
+                    RoundedRectangle(cornerRadius: isCLITheme ? 10 : 999)
+                        .stroke(isHovering && isCLITheme ? theme.accentPrimary.opacity(0.8) : theme.glassBorder, lineWidth: 1)
+
+                    if isCLITheme {
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(theme.glassBorder.opacity(0.30), lineWidth: 1)
+                            .padding(1)
+                    }
                 }
             )
-            .shadow(color: isHovering ? theme.accentPrimary.opacity(0.3) : .clear, radius: 8, y: 2)
+            .shadow(color: isHovering ? theme.accentPrimary.opacity(isCLITheme ? 0.14 : 0.3) : .clear, radius: isCLITheme ? 4 : 8, y: 2)
         }
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
@@ -1200,7 +1278,7 @@ struct PulsingStatusDot: View {
                 Circle()
                     .stroke(color, lineWidth: 2)
                     .frame(width: 16, height: 16)
-                    .opacity(0.5)
+                    .opacity(0.7)
             }
         }
         .onChange(of: isSyncing) { _, syncing in
