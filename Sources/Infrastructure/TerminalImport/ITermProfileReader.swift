@@ -90,10 +90,18 @@ public struct ITermProfileReader {
         guard let colorDict = profile[key] as? [String: Any] else {
             throw ReadError.missingColors(key)
         }
-        let red = (colorDict["Red Component"] as? Double) ?? 0.0
-        let green = (colorDict["Green Component"] as? Double) ?? 0.0
-        let blue = (colorDict["Blue Component"] as? Double) ?? 0.0
-        let alpha = (colorDict["Alpha Component"] as? Double) ?? 1.0
+        let red = doubleValue(colorDict["Red Component"]) ?? 0.0
+        let green = doubleValue(colorDict["Green Component"]) ?? 0.0
+        let blue = doubleValue(colorDict["Blue Component"]) ?? 0.0
+        let alpha = doubleValue(colorDict["Alpha Component"]) ?? 1.0
         return TerminalColorScheme.RGBColor(red: red, green: green, blue: blue, alpha: alpha)
+    }
+
+    /// Extract a Double from a value that may be stored as Double, NSNumber, or String.
+    private static func doubleValue(_ value: Any?) -> Double? {
+        if let d = value as? Double { return d }
+        if let n = value as? NSNumber { return n.doubleValue }
+        if let s = value as? String { return Double(s) }
+        return nil
     }
 }
