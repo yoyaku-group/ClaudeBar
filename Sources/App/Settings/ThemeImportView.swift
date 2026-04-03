@@ -8,6 +8,7 @@ import UniformTypeIdentifiers
 /// **Fallback:** File picker for `.itermcolors` files (for manual import or non-iTerm2 users).
 struct ThemeImportButton: View {
     @Environment(\.appTheme) private var theme
+    @State private var settings = AppSettings.shared
     @State private var isImporting = false
     @State private var importError: String?
     @State private var importedThemeName: String?
@@ -93,9 +94,11 @@ struct ThemeImportButton: View {
                 importError = "Invalid scheme: \(scheme.ansiColors.count) ANSI colors (need 16)"
                 return
             }
-            let theme = try ThemeRegistry.shared.importScheme(scheme)
+            let imported = try ThemeRegistry.shared.importScheme(scheme)
             importedThemeName = scheme.name
-            print("[ThemeImport] Synced '\(scheme.name)' as \(theme.id)")
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                settings.themeMode = imported.id
+            }
         } catch ITermProfileReader.ReadError.notInstalled {
             importError = "iTerm2 not found"
         } catch ITermProfileReader.ReadError.noProfiles {
@@ -125,8 +128,11 @@ struct ThemeImportButton: View {
             defer { url.stopAccessingSecurityScopedResource() }
 
             do {
-                let theme = try ThemeRegistry.shared.importItermcolors(from: url)
-                importedThemeName = theme.displayName
+                let imported = try ThemeRegistry.shared.importItermcolors(from: url)
+                importedThemeName = imported.displayName
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    settings.themeMode = imported.id
+                }
             } catch {
                 importError = "Import failed: \(error.localizedDescription)"
             }
