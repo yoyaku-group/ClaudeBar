@@ -89,12 +89,23 @@ struct ThemeImportButton: View {
 
         do {
             let scheme = try ITermProfileReader.readActiveProfile()
-            try ThemeRegistry.shared.importScheme(scheme)
+            guard scheme.isValid else {
+                importError = "Invalid scheme: \(scheme.ansiColors.count) ANSI colors (need 16)"
+                return
+            }
+            let theme = try ThemeRegistry.shared.importScheme(scheme)
             importedThemeName = scheme.name
+            print("[ThemeImport] Synced '\(scheme.name)' as \(theme.id)")
         } catch ITermProfileReader.ReadError.notInstalled {
             importError = "iTerm2 not found"
+        } catch ITermProfileReader.ReadError.noProfiles {
+            importError = "No iTerm2 profiles found"
+        } catch ITermProfileReader.ReadError.profileNotFound {
+            importError = "Default profile not found"
+        } catch ITermProfileReader.ReadError.missingColors(let key) {
+            importError = "Missing color: \(key)"
         } catch {
-            importError = "Sync failed: \(error.localizedDescription)"
+            importError = "Sync failed: \(error)"
         }
     }
 
