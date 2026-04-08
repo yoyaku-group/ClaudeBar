@@ -243,6 +243,75 @@ struct QuotaMonitorTests {
         #expect(overallStatus == .critical)
     }
 
+    // MARK: - Refresh Selected
+
+    @Test
+    func `refreshSelected only refreshes the selected provider`() async {
+        // Given
+        let claudeProbe = MockUsageProbe()
+        given(claudeProbe).isAvailable().willReturn(true)
+        given(claudeProbe).probe().willReturn(UsageSnapshot(
+            providerId: "claude",
+            quotas: [UsageQuota(percentRemaining: 70, quotaType: .session, providerId: "claude")],
+            capturedAt: Date()
+        ))
+
+        let codexProbe = MockUsageProbe()
+        given(codexProbe).isAvailable().willReturn(true)
+        given(codexProbe).probe().willReturn(UsageSnapshot(
+            providerId: "codex",
+            quotas: [UsageQuota(percentRemaining: 40, quotaType: .session, providerId: "codex")],
+            capturedAt: Date()
+        ))
+
+        let settings = makeSettingsRepository()
+        let claudeProvider = ClaudeProvider(probe: claudeProbe, settingsRepository: settings)
+        let codexProvider = CodexProvider(probe: codexProbe, settingsRepository: settings)
+        let monitor = makeMonitor(providers: AIProviders(providers: [claudeProvider, codexProvider]))
+
+        // Selected provider is "claude" by default
+
+        // When
+        await monitor.refreshSelected()
+
+        // Then - only Claude refreshed, Codex untouched
+        #expect(claudeProvider.snapshot != nil)
+        #expect(codexProvider.snapshot == nil)
+    }
+
+    @Test
+    func `refreshSelected refreshes newly selected provider`() async {
+        // Given
+        let claudeProbe = MockUsageProbe()
+        given(claudeProbe).isAvailable().willReturn(true)
+        given(claudeProbe).probe().willReturn(UsageSnapshot(
+            providerId: "claude",
+            quotas: [UsageQuota(percentRemaining: 70, quotaType: .session, providerId: "claude")],
+            capturedAt: Date()
+        ))
+
+        let codexProbe = MockUsageProbe()
+        given(codexProbe).isAvailable().willReturn(true)
+        given(codexProbe).probe().willReturn(UsageSnapshot(
+            providerId: "codex",
+            quotas: [UsageQuota(percentRemaining: 40, quotaType: .session, providerId: "codex")],
+            capturedAt: Date()
+        ))
+
+        let settings = makeSettingsRepository()
+        let claudeProvider = ClaudeProvider(probe: claudeProbe, settingsRepository: settings)
+        let codexProvider = CodexProvider(probe: codexProbe, settingsRepository: settings)
+        let monitor = makeMonitor(providers: AIProviders(providers: [claudeProvider, codexProvider]))
+
+        // When - switch to codex then refresh selected
+        monitor.selectProvider(id: "codex")
+        await monitor.refreshSelected()
+
+        // Then - only Codex refreshed
+        #expect(claudeProvider.snapshot == nil)
+        #expect(codexProvider.snapshot != nil)
+    }
+
     // MARK: - Continuous Monitoring
 
     @Test

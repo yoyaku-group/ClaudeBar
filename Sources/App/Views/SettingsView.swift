@@ -69,6 +69,16 @@ struct SettingsContentView: View {
         monitor.provider(for: ProviderID.alibaba)?.isEnabled ?? false
     }
 
+    /// Extension providers that are enabled and have config fields declared in their manifest.
+    private var enabledExtensionProvidersWithConfig: [ExtensionProvider] {
+        monitor.allProviders.compactMap { provider in
+            guard let extProvider = provider as? ExtensionProvider,
+                  extProvider.isEnabled,
+                  extProvider.manifest.hasConfig else { return nil }
+            return extProvider
+        }
+    }
+
     /// Maximum height for the settings view to ensure it fits on small screens
     private var maxSettingsHeight: CGFloat {
         let screenHeight = NSScreen.main?.visibleFrame.height ?? 800
@@ -121,6 +131,13 @@ struct SettingsContentView: View {
                     if isBedrockEnabled {
                         BedrockConfigCard(monitor: monitor)
                             .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
+                    ForEach(enabledExtensionProvidersWithConfig, id: \.id) { extProvider in
+                        ExtensionConfigCard(
+                            provider: extProvider,
+                            configRepository: AppSettings.shared.extensionConfig
+                        )
+                        .transition(.opacity.combined(with: .move(edge: .top)))
                     }
                     backgroundSyncCard
                     burnRateCard
@@ -198,6 +215,7 @@ struct SettingsContentView: View {
                     }
                 }
             }
+
             ThemeImportButton()
                 .frame(maxWidth: .infinity)
         }
@@ -398,28 +416,35 @@ struct SettingsContentView: View {
     }
 
     private func providerToggleRow(provider: any AIProvider) -> some View {
-        HStack(spacing: 10) {
-            // Provider icon
-            ProviderIconView(providerId: provider.id, size: 20)
+        VStack(spacing: 4) {
+            HStack(spacing: 10) {
+                // Provider icon
+                ProviderIconView(providerId: provider.id, size: 20)
 
             Text(provider.name)
                 .font(theme.font(size: 12, weight: .medium))
                 .foregroundStyle(theme.textPrimary)
 
-            Spacer()
+                Spacer()
 
-            Toggle("", isOn: Binding(
-                get: { provider.isEnabled },
-                set: { newValue in
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        monitor.setProviderEnabled(provider.id, enabled: newValue)
+                Toggle("", isOn: Binding(
+                    get: { provider.isEnabled },
+                    set: { newValue in
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            monitor.setProviderEnabled(provider.id, enabled: newValue)
+                        }
                     }
-                }
-            ))
-            .toggleStyle(.switch)
-            .tint(theme.accentPrimary)
-            .scaleEffect(0.8)
-            .labelsHidden()
+                ))
+                .toggleStyle(.switch)
+                .tint(theme.accentPrimary)
+                .scaleEffect(0.8)
+                .labelsHidden()
+            }
+
+            if provider.isEnabled {
+                CustomCardURLField(providerId: provider.id)
+                    .padding(.leading, 30)
+            }
         }
         .padding(.vertical, 4)
     }

@@ -94,6 +94,10 @@ struct ClaudeBarApp: App {
                 probe: AlibabaUsageProbe(settingsRepository: settingsRepository, cookieProvider: AlibabaBrowserCookieProvider()),
                 settingsRepository: settingsRepository
             ),
+            MistralProvider(
+                probe: MistralUsageProbe(),
+                settingsRepository: settingsRepository
+            ),
         ])
         AppLog.providers.info("Created \(repository.all.count) providers")
 
@@ -104,6 +108,16 @@ struct ClaudeBarApp: App {
             alerter: quotaAlerter
         )
         AppLog.monitor.info("QuotaMonitor initialized")
+
+        // Load user extensions from ~/.claudebar/extensions/
+        let extensionRegistry = ExtensionRegistry(
+            settingsRepository: settingsRepository,
+            configRepository: AppSettings.shared.extensionConfig
+        )
+        let extensionProviders = extensionRegistry.loadExtensions(into: monitor)
+        if !extensionProviders.isEmpty {
+            AppLog.providers.info("Loaded \(extensionProviders.count) extension provider(s): \(extensionProviders.map(\.name).joined(separator: ", "))")
+        }
 
         // Start hook server if hooks are enabled
         if settingsRepository.isHookEnabled() {

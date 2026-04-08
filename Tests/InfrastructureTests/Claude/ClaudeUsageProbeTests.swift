@@ -290,6 +290,56 @@ struct ClaudeUsageProbeTests {
         #expect(snapshot.quotas.count >= 1)
     }
 
+    // MARK: - Account Info from ClaudeAccountInfoResolver
+
+    @Test
+    func `probe resolves account info from config file`() async throws {
+        // Given - new tabbed CLI output (no account info in /usage tab)
+        let mockExecutor = MockCLIExecutor()
+
+        let tabbedUsageOutput = """
+          Status   Config   Usage
+
+        Current session
+        ▌                                                  1% used
+        Resets 12am (Asia/Shanghai)
+
+        Current week (all models)
+        ██████████████████████▌                            45% used
+        Resets 10:59am (Asia/Shanghai)
+
+        Extra usage
+        Extra usage not enabled • /extra-usage to enable
+
+        Esc to cancel
+        """
+
+        given(mockExecutor).locate(.any).willReturn("/usr/local/bin/claude")
+        given(mockExecutor).execute(
+            binary: .any,
+            args: .matching { $0.first == "/usage" },
+            input: .any,
+            timeout: .any,
+            workingDirectory: .any,
+            autoResponses: .any
+        ).willReturn(CLIResult(output: tabbedUsageOutput, exitCode: 0))
+
+        // Mock resolver returns account info
+        let mockResolver = MockAccountInfoResolving()
+        given(mockResolver).resolve().willReturn(AccountInfo(email: "user@example.com", organization: "testuser"))
+
+        let probe = ClaudeUsageProbe(cliExecutor: mockExecutor, accountInfoResolver: mockResolver)
+
+        // When
+        let snapshot = try await probe.probe()
+
+        // Then - account info from config, tier from CLI output
+        #expect(snapshot.accountEmail == "user@example.com")
+        #expect(snapshot.accountOrganization == "testuser")
+        #expect(snapshot.quotas.count >= 1)
+        #expect(snapshot.sessionQuota?.percentRemaining == 99)
+    }
+
     // MARK: - Setup Token Environment Exclusion Tests
 
     @Test

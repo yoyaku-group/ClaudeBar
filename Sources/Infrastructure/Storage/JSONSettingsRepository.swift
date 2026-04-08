@@ -141,6 +141,15 @@ public final class JSONSettingsRepository:
         store.write(value: enabled, key: "providers.\(id).isEnabled")
     }
 
+    public func customCardURL(forProvider id: String) -> String? {
+        store.read(key: "providers.\(id).customCardURL")
+    }
+
+    public func setCustomCardURL(_ url: String?, forProvider id: String) {
+        let value: Any? = (url?.isEmpty == false) ? url : nil
+        store.write(value: value, key: "providers.\(id).customCardURL")
+    }
+
     // MARK: - ClaudeSettingsRepository
 
     public func claudeProbeMode() -> ClaudeProbeMode {
@@ -153,6 +162,14 @@ public final class JSONSettingsRepository:
 
     public func setClaudeProbeMode(_ mode: ClaudeProbeMode) {
         store.write(value: mode.rawValue, key: "claude.probeMode")
+    }
+
+    public func claudeCliFallbackEnabled() -> Bool {
+        store.read(key: "claude.cliFallbackEnabled") ?? true
+    }
+
+    public func setClaudeCliFallbackEnabled(_ enabled: Bool) {
+        store.write(value: enabled, key: "claude.cliFallbackEnabled")
     }
 
     // MARK: - CodexSettingsRepository
