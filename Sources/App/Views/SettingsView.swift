@@ -182,7 +182,7 @@ struct SettingsContentView: View {
                         .frame(width: 32, height: 32)
 
                     Image(systemName: ThemeRegistry.shared.theme(for: settings.themeMode)?.icon ?? currentThemeMode.icon)
-                        .font(.system(size: 12, weight: .bold))
+                        .font(theme.font(size: 12, weight: .bold))
                         .foregroundStyle(theme.id == "cli" ? theme.textPrimary : .white)
                 }
 
@@ -257,7 +257,7 @@ struct SettingsContentView: View {
                     .frame(width: 32, height: 32)
 
                 Image(systemName: "percent")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(theme.font(size: 12, weight: .bold))
                     .foregroundStyle(theme.id == "cli" ? theme.textPrimary : .white)
             }
 
@@ -316,7 +316,7 @@ struct SettingsContentView: View {
                     .frame(width: 32, height: 32)
 
                 Image(systemName: "square.grid.2x2")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(theme.font(size: 12, weight: .bold))
                     .foregroundStyle(theme.id == "cli" ? theme.textPrimary : .white)
             }
 
@@ -397,7 +397,7 @@ struct SettingsContentView: View {
                     .frame(width: 32, height: 32)
 
                 Image(systemName: "cpu")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(theme.font(size: 12, weight: .bold))
                     .foregroundStyle(.white)
             }
 
@@ -459,7 +459,7 @@ struct SettingsContentView: View {
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 10, weight: .bold))
+                        .font(theme.font(size: 10, weight: .bold))
                     Text("Back")
                         .font(theme.font(size: 11, weight: .medium))
                 }
@@ -508,7 +508,7 @@ struct SettingsContentView: View {
                                     .frame(width: 14, height: 14)
                             } else {
                                 Image(systemName: "arrow.clockwise")
-                                    .font(.system(size: 11, weight: .semibold))
+                                    .font(theme.font(size: 11, weight: .semibold))
                             }
 
                             Text(sparkleUpdater?.isCheckingForUpdates == true ? "Checking..." : "Check for Updates")
@@ -539,7 +539,7 @@ struct SettingsContentView: View {
                     if let lastCheck = sparkleUpdater?.lastUpdateCheckDate {
                         HStack(spacing: 4) {
                             Image(systemName: "clock.fill")
-                                .font(.system(size: 8))
+                                .font(theme.font(size: 8))
 
                             Text("Last checked: \(lastCheck.formatted(date: .abbreviated, time: .shortened))")
                                 .font(theme.font(size: 9, weight: .semibold))
@@ -586,7 +586,7 @@ struct SettingsContentView: View {
                 } else {
                     HStack(spacing: 6) {
                         Image(systemName: "hammer.fill")
-                            .font(.system(size: 10))
+                            .font(theme.font(size: 10))
                         Text("Updates unavailable in debug builds")
                             .font(theme.font(size: 10, weight: .medium))
                     }
@@ -637,7 +637,7 @@ struct SettingsContentView: View {
                     .frame(width: 32, height: 32)
 
                 Image(systemName: "arrow.down.circle.fill")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(theme.font(size: 12, weight: .bold))
                     .foregroundStyle(.white)
             }
 
@@ -687,7 +687,7 @@ struct SettingsContentView: View {
                         .frame(width: 32, height: 32)
 
                     Image(systemName: "doc.text.fill")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(theme.font(size: 12, weight: .bold))
                         .foregroundStyle(.white)
                 }
 
@@ -709,7 +709,7 @@ struct SettingsContentView: View {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "doc.text")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(theme.font(size: 11, weight: .semibold))
 
                     Text("Open Log File")
                         .font(theme.font(size: 11, weight: .medium))
@@ -767,7 +767,7 @@ struct SettingsContentView: View {
                         .frame(width: 32, height: 32)
 
                     Image(systemName: "info.circle.fill")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(theme.font(size: 12, weight: .bold))
                         .foregroundStyle(.white)
                 }
 
@@ -787,7 +787,7 @@ struct SettingsContentView: View {
             Link(destination: URL(string: "https://github.com/tddworks/claudebar")!) {
                 HStack(spacing: 6) {
                     Image(systemName: "link")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(theme.font(size: 11, weight: .semibold))
 
                     Text("View on GitHub")
                         .font(theme.font(size: 11, weight: .medium))
@@ -795,7 +795,7 @@ struct SettingsContentView: View {
                     Spacer()
 
                     Image(systemName: "arrow.up.right")
-                        .font(.system(size: 9, weight: .bold))
+                        .font(theme.font(size: 9, weight: .bold))
                 }
                 .foregroundStyle(.white)
                 .padding(.horizontal, 14)
@@ -857,7 +857,7 @@ struct SettingsContentView: View {
                     .frame(width: 32, height: 32)
 
                 Image(systemName: "power")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(theme.font(size: 12, weight: .bold))
                     .foregroundStyle(.white)
             }
 
@@ -957,7 +957,7 @@ struct SettingsContentView: View {
                     .frame(width: 32, height: 32)
 
                 Image(systemName: "arrow.triangle.2.circlepath")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(theme.font(size: 12, weight: .bold))
                     .foregroundStyle(.white)
             }
 
@@ -992,7 +992,7 @@ struct SettingsContentView: View {
                         .frame(width: 32, height: 32)
 
                     Image(systemName: "flame")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(theme.font(size: 12, weight: .bold))
                         .foregroundStyle(theme.id == "cli" ? theme.textPrimary : .white)
                 }
 
@@ -1110,7 +1110,7 @@ struct SettingsContentView: View {
                     .frame(width: 32, height: 32)
 
                 Image(systemName: "antenna.radiowaves.left.and.right")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(theme.font(size: 12, weight: .bold))
                     .foregroundStyle(.white)
             }
 
@@ -1205,7 +1205,7 @@ struct ThemeOptionButton: View {
                         .frame(width: 28, height: 28)
 
                     Image(systemName: themeProvider.icon)
-                        .font(.system(size: 11, weight: .bold))
+                        .font(theme.font(size: 11, weight: .bold))
                         .foregroundStyle(
                             themeProvider.id == "cli" || themeProvider.id == "yoyaku" ? Color.black : .white
                         )
@@ -1213,13 +1213,13 @@ struct ThemeOptionButton: View {
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(themeProvider.displayName)
-                        .font(.system(size: 11, weight: .medium, design: themeProvider.fontDesign))
+                        .font(theme.font(size: 11, weight: .medium))
                         .foregroundStyle(theme.textPrimary)
                         .lineLimit(1)
 
                     if let subtitle = themeProvider.subtitle {
                         Text(subtitle)
-                            .font(.system(size: 8, weight: .medium))
+                            .font(theme.font(size: 8, weight: .medium))
                             .foregroundStyle(themeProvider.accentPrimary)
                     }
                 }
@@ -1231,7 +1231,7 @@ struct ThemeOptionButton: View {
                         ThemeRegistry.shared.removeImportedTheme(id: themeProvider.id)
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 12))
+                            .font(theme.font(size: 12))
                             .foregroundStyle(theme.textTertiary)
                     }
                     .buttonStyle(.plain)
@@ -1239,7 +1239,7 @@ struct ThemeOptionButton: View {
 
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 14))
+                        .font(theme.font(size: 14))
                         .foregroundStyle(theme.statusHealthy)
                 }
             }
@@ -1282,7 +1282,7 @@ struct DisplayModeButton: View {
         Button(action: action) {
             HStack(spacing: 6) {
                 Image(systemName: iconName)
-                    .font(.system(size: 10, weight: .bold))
+                    .font(theme.font(size: 10, weight: .bold))
 
                 Text(mode.displayLabel)
                     .font(theme.font(size: 11, weight: .semibold))

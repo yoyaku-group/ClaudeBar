@@ -18,12 +18,12 @@ struct ExtensionMetricCardView: View {
                 HStack(spacing: 5) {
                     if let iconName = metric.icon {
                         Image(systemName: iconName)
-                            .font(.system(size: 9, weight: .bold))
+                            .font(theme.font(size: 9, weight: .bold))
                             .foregroundStyle(accentColor)
                     }
 
                     Text(metric.label.uppercased())
-                        .font(.system(size: 8, weight: .medium, design: theme.fontDesign))
+                        .font(theme.font(size: 8, weight: .medium))
                         .foregroundStyle(theme.textSecondary)
                         .tracking(0.3)
                 }
@@ -34,7 +34,7 @@ struct ExtensionMetricCardView: View {
             // Large value display
             HStack(alignment: .firstTextBaseline) {
                 Text(metric.value)
-                    .font(.system(size: 24, weight: .bold, design: theme.fontDesign))
+                    .font(theme.font(size: 24, weight: .bold))
                     .foregroundStyle(theme.textPrimary)
                     .contentTransition(.numericText())
                     .lineLimit(1)
@@ -43,7 +43,7 @@ struct ExtensionMetricCardView: View {
                 Spacer()
 
                 Text(metric.unit)
-                    .font(.system(size: 11, weight: .medium, design: theme.fontDesign))
+                    .font(theme.font(size: 11, weight: .medium))
                     .foregroundStyle(theme.textTertiary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
@@ -73,10 +73,10 @@ struct ExtensionMetricCardView: View {
             if let delta = metric.delta {
                 HStack(spacing: 3) {
                     Image(systemName: "arrow.triangle.swap")
-                        .font(.system(size: 7))
+                        .font(theme.font(size: 7))
 
                     Text(deltaText(delta))
-                        .font(.system(size: 8, weight: .medium, design: theme.fontDesign))
+                        .font(theme.font(size: 8, weight: .medium))
                 }
                 .foregroundStyle(theme.textTertiary)
                 .lineLimit(1)

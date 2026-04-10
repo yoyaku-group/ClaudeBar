@@ -64,17 +64,17 @@ struct ExtensionConfigCard: View {
                     .frame(width: 32, height: 32)
 
                 Image(systemName: manifest.icon ?? "puzzlepiece.extension.fill")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(theme.font(size: 12, weight: .bold))
                     .foregroundStyle(.white)
             }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("\(manifest.name) Configuration")
-                    .font(.system(size: 14, weight: .bold, design: theme.fontDesign))
+                    .font(theme.font(size: 14, weight: .bold))
                     .foregroundStyle(theme.textPrimary)
 
                 Text(manifest.description ?? "Extension settings")
-                    .font(.system(size: 10, weight: .medium, design: theme.fontDesign))
+                    .font(theme.font(size: 10, weight: .medium))
                     .foregroundStyle(theme.textTertiary)
             }
 
@@ -88,7 +88,7 @@ struct ExtensionConfigCard: View {
     private func fieldView(for field: ConfigField) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(field.label.uppercased())
-                .font(.system(size: 9, weight: .semibold, design: theme.fontDesign))
+                .font(theme.font(size: 9, weight: .semibold))
                 .foregroundStyle(theme.textSecondary)
                 .tracking(0.5)
 
@@ -105,7 +105,7 @@ struct ExtensionConfigCard: View {
 
             if let helpText = field.helpText {
                 Text(helpText)
-                    .font(.system(size: 9, weight: .semibold, design: theme.fontDesign))
+                    .font(theme.font(size: 9, weight: .semibold))
                     .foregroundStyle(theme.textTertiary)
             }
         }
@@ -117,7 +117,7 @@ struct ExtensionConfigCard: View {
             text: binding(for: field),
             prompt: Text(field.placeholder ?? "").foregroundStyle(theme.textTertiary)
         )
-        .font(.system(size: 12, weight: .medium, design: theme.fontDesign))
+        .font(theme.font(size: 12, weight: .medium))
         .foregroundStyle(theme.textPrimary)
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
@@ -141,14 +141,14 @@ struct ExtensionConfigCard: View {
                     )
                 }
             }
-            .font(.system(size: 12, weight: .medium, design: theme.fontDesign))
+            .font(theme.font(size: 12, weight: .medium))
             .foregroundStyle(theme.textPrimary)
 
             Button {
                 secretVisible[field.id] = !(secretVisible[field.id] ?? false)
             } label: {
                 Image(systemName: secretVisible[field.id] == true ? "eye.slash.fill" : "eye.fill")
-                    .font(.system(size: 10))
+                    .font(theme.font(size: 10))
                     .foregroundStyle(theme.textSecondary)
             }
             .buttonStyle(.plain)

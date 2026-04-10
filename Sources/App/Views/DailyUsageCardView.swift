@@ -18,7 +18,7 @@ struct DailyUsageCardView: View {
             HStack(alignment: .top, spacing: 0) {
                 HStack(spacing: 5) {
                     Image(systemName: metric.iconName)
-                        .font(.system(size: 9, weight: .bold))
+                        .font(theme.font(size: 9, weight: .bold))
                         .foregroundStyle(metric.themeColor(for: theme))
 
                     Text(metric.label.uppercased())
@@ -66,7 +66,7 @@ struct DailyUsageCardView: View {
             if let deltaText = formattedDelta {
                 HStack(spacing: 3) {
                     Image(systemName: "arrow.triangle.swap")
-                        .font(.system(size: 7))
+                        .font(theme.font(size: 7))
 
                     Text(deltaText)
                         .font(theme.font(size: 8, weight: .medium))

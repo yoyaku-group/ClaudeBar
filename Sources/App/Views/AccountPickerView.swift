@@ -49,12 +49,12 @@ struct AccountPill: View {
                         .frame(width: 16, height: 16)
 
                     Text(account.initialLetter)
-                        .font(.system(size: 8, weight: .bold, design: theme.fontDesign))
+                        .font(theme.font(size: 8, weight: .bold))
                         .foregroundStyle(isActive ? .white : theme.textSecondary)
                 }
 
                 Text(account.displayName)
-                    .font(.system(size: 10, weight: isActive ? .semibold : .medium, design: theme.fontDesign))
+                    .font(theme.font(size: 10, weight: isActive ? .semibold : .medium))
                     .foregroundStyle(isActive ? theme.textPrimary : theme.textSecondary)
                     .lineLimit(1)
             }

@@ -24,7 +24,7 @@ struct SharePassOverlay: View {
                 // Header
                 HStack {
                     Image(systemName: "gift.fill")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(theme.font(size: 16, weight: .semibold))
                         .foregroundStyle(theme.accentPrimary)
 
                     Text("Share Claude Code")
@@ -37,7 +37,7 @@ struct SharePassOverlay: View {
                         onDismiss()
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 18))
+                            .font(theme.font(size: 18))
                             .foregroundStyle(theme.textTertiary)
                     }
                     .buttonStyle(.plain)
@@ -57,7 +57,7 @@ struct SharePassOverlay: View {
                         copyToClipboard()
                     } label: {
                         Image(systemName: copied ? "checkmark.circle.fill" : "doc.on.doc.fill")
-                            .font(.system(size: 14))
+                            .font(theme.font(size: 14))
                             .foregroundStyle(copied ? theme.statusHealthy : theme.accentPrimary)
                     }
                     .buttonStyle(.plain)
@@ -75,7 +75,7 @@ struct SharePassOverlay: View {
                     } label: {
                         HStack(spacing: 5) {
                             Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(theme.font(size: 11, weight: .semibold))
                             Text(copied ? "Copied!" : "Copy Link")
                                 .font(theme.font(size: 11, weight: .medium))
                         }
@@ -96,7 +96,7 @@ struct SharePassOverlay: View {
                     } label: {
                         HStack(spacing: 5) {
                             Image(systemName: "safari")
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(theme.font(size: 11, weight: .semibold))
                             Text("Open")
                                 .font(theme.font(size: 11, weight: .medium))
                         }

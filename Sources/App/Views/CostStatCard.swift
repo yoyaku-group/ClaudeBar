@@ -42,7 +42,7 @@ struct CostStatCard: View {
                 // Left side: icon and label
                 HStack(spacing: 5) {
                     Image(systemName: "dollarsign.circle.fill")
-                        .font(.system(size: 9, weight: .bold))
+                        .font(theme.font(size: 9, weight: .bold))
                         .foregroundStyle(budgetStatusColor)
 
                     Text("API COST")
@@ -77,7 +77,7 @@ struct CostStatCard: View {
             if costUsage.apiDuration > 0 {
                 HStack(spacing: 3) {
                     Image(systemName: "clock.fill")
-                        .font(.system(size: 7))
+                        .font(theme.font(size: 7))
 
                     Text("API Time: \(costUsage.formattedApiDuration)")
                         .font(theme.font(size: 9, weight: .semibold))
@@ -87,7 +87,7 @@ struct CostStatCard: View {
             } else if let resetText = costUsage.resetText {
                 HStack(spacing: 3) {
                     Image(systemName: "clock.arrow.circlepath")
-                        .font(.system(size: 7))
+                        .font(theme.font(size: 7))
 
                     Text(resetText)
                         .font(theme.font(size: 9, weight: .semibold))

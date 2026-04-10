@@ -104,7 +104,7 @@ struct CopilotConfigCard: View {
                     .frame(width: 32, height: 32)
 
                 Image(systemName: "chevron.left.forwardslash.chevron.right")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(theme.font(size: 12, weight: .bold))
                     .foregroundStyle(.white)
             }
 
@@ -150,7 +150,7 @@ struct CopilotConfigCard: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: "creditcard")
-                        .font(.system(size: 10))
+                        .font(theme.font(size: 10))
                         .foregroundStyle(copilotProbeMode == .billing ? theme.accentPrimary : theme.textTertiary)
                         .frame(width: 16)
 
@@ -167,7 +167,7 @@ struct CopilotConfigCard: View {
 
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: "network")
-                        .font(.system(size: 10))
+                        .font(theme.font(size: 10))
                         .foregroundStyle(copilotProbeMode == .copilotAPI ? theme.accentPrimary : theme.textTertiary)
                         .frame(width: 16)
 
@@ -220,7 +220,7 @@ struct CopilotConfigCard: View {
                     if copilotProvider?.hasToken == true {
                         HStack(spacing: 3) {
                             Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: 9))
+                                .font(theme.font(size: 9))
                             Text("Configured")
                                 .font(theme.font(size: 9, weight: .semibold))
                         }
@@ -253,7 +253,7 @@ struct CopilotConfigCard: View {
                         showToken.toggle()
                     } label: {
                         Image(systemName: showToken ? "eye.slash.fill" : "eye.fill")
-                            .font(.system(size: 11))
+                            .font(theme.font(size: 11))
                             .foregroundStyle(theme.textSecondary)
                             .frame(width: 28, height: 28)
                             .background(
@@ -267,7 +267,7 @@ struct CopilotConfigCard: View {
                 if let error = saveError {
                     HStack(spacing: 4) {
                         Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.system(size: 9))
+                            .font(theme.font(size: 9))
                         Text(error)
                             .font(theme.font(size: 9, weight: .semibold))
                     }
@@ -275,7 +275,7 @@ struct CopilotConfigCard: View {
                 } else if saveSuccess {
                     HStack(spacing: 4) {
                         Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 9))
+                            .font(theme.font(size: 9))
                         Text("Token saved!")
                             .font(theme.font(size: 9, weight: .semibold))
                     }
@@ -350,7 +350,7 @@ struct CopilotConfigCard: View {
                     VStack(alignment: .leading, spacing: 8) {
                         HStack(spacing: 6) {
                             Image(systemName: "exclamationmark.triangle.fill")
-                                .font(.system(size: 10))
+                                .font(theme.font(size: 10))
                                 .foregroundStyle(theme.statusWarning)
                             Text("API returned no usage data")
                                 .font(theme.font(size: 10, weight: .semibold))
@@ -366,7 +366,7 @@ struct CopilotConfigCard: View {
                                 Text("View usage on GitHub")
                                     .font(theme.font(size: 9, weight: .semibold))
                                 Image(systemName: "arrow.up.right")
-                                    .font(.system(size: 8))
+                                    .font(theme.font(size: 8))
                             }
                             .foregroundStyle(theme.accentPrimary)
                         }
@@ -515,7 +515,7 @@ struct CopilotConfigCard: View {
                             Text("Create fine-grained token")
                                 .font(theme.font(size: 9, weight: .semibold))
                             Image(systemName: "arrow.up.right")
-                                .font(.system(size: 7, weight: .bold))
+                                .font(theme.font(size: 7, weight: .bold))
                         }
                         .foregroundStyle(theme.accentPrimary)
                     }
@@ -529,7 +529,7 @@ struct CopilotConfigCard: View {
                             Text("Create classic token")
                                 .font(theme.font(size: 9, weight: .semibold))
                             Image(systemName: "arrow.up.right")
-                                .font(.system(size: 7, weight: .bold))
+                                .font(theme.font(size: 7, weight: .bold))
                         }
                         .foregroundStyle(theme.accentPrimary)
                     }
@@ -543,7 +543,7 @@ struct CopilotConfigCard: View {
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "trash.fill")
-                            .font(.system(size: 9))
+                            .font(theme.font(size: 9))
                         Text("Remove Token")
                             .font(theme.font(size: 9, weight: .semibold))
                     }

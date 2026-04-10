@@ -106,7 +106,7 @@ struct ZaiConfigCard: View {
                         .frame(width: 32, height: 32)
 
                     Image(systemName: "gearshape.fill")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(theme.font(size: 12, weight: .bold))
                         .foregroundStyle(.white)
                 }
 

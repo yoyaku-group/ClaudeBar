@@ -84,7 +84,7 @@ struct ClaudeConfigCard: View {
                     .frame(width: 32, height: 32)
 
                 Image(systemName: "gear")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(theme.font(size: 12, weight: .bold))
                     .foregroundStyle(.white)
             }
 
@@ -127,7 +127,7 @@ struct ClaudeConfigCard: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: "terminal")
-                        .font(.system(size: 10))
+                        .font(theme.font(size: 10))
                         .foregroundStyle(claudeProbeMode == .cli ? theme.accentPrimary : theme.textTertiary)
                         .frame(width: 16)
 
@@ -144,7 +144,7 @@ struct ClaudeConfigCard: View {
 
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: "network")
-                        .font(.system(size: 10))
+                        .font(theme.font(size: 10))
                         .foregroundStyle(claudeProbeMode == .api ? theme.accentPrimary : theme.textTertiary)
                         .frame(width: 16)
 
@@ -166,7 +166,7 @@ struct ClaudeConfigCard: View {
 
                 HStack(spacing: 6) {
                     Image(systemName: hasCredentials ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                        .font(.system(size: 10))
+                        .font(theme.font(size: 10))
                         .foregroundStyle(hasCredentials ? theme.statusHealthy : theme.statusWarning)
 
                     Text(hasCredentials ? "OAuth credentials found" : "No OAuth credentials found")
@@ -183,10 +183,10 @@ struct ClaudeConfigCard: View {
                 Toggle(isOn: $claudeCliFallbackEnabled) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("CLI fallback")
-                            .font(.system(size: 10, weight: .semibold, design: theme.fontDesign))
+                            .font(theme.font(size: 10, weight: .semibold))
                             .foregroundStyle(theme.textPrimary)
                         Text("Fall back to `claude /usage` if OAuth API is unavailable.")
-                            .font(.system(size: 9, weight: .medium, design: theme.fontDesign))
+                            .font(theme.font(size: 9, weight: .medium))
                             .foregroundStyle(theme.textTertiary)
                     }
                 }
@@ -256,7 +256,7 @@ struct ClaudeConfigCard: View {
                     .frame(width: 32, height: 32)
 
                 Image(systemName: "dollarsign.circle.fill")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(theme.font(size: 12, weight: .bold))
                     .foregroundStyle(.white)
             }
 

@@ -57,17 +57,17 @@ struct AccountManagementCard: View {
                     .frame(width: 32, height: 32)
 
                 Image(systemName: "person.2.fill")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(theme.font(size: 12, weight: .bold))
                     .foregroundStyle(.white)
             }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("Accounts")
-                    .font(.system(size: 14, weight: .bold, design: theme.fontDesign))
+                    .font(theme.font(size: 14, weight: .bold))
                     .foregroundStyle(theme.textPrimary)
 
                 Text("\(provider.accounts.count) account\(provider.accounts.count == 1 ? "" : "s") configured")
-                    .font(.system(size: 10, weight: .medium, design: theme.fontDesign))
+                    .font(theme.font(size: 10, weight: .medium))
                     .foregroundStyle(theme.textTertiary)
             }
 
@@ -95,7 +95,7 @@ struct AccountManagementCard: View {
                     .frame(width: 24, height: 24)
 
                 Text(account.initialLetter)
-                    .font(.system(size: 10, weight: .bold, design: theme.fontDesign))
+                    .font(theme.font(size: 10, weight: .bold))
                     .foregroundStyle(
                         account.accountId == provider.activeAccount.accountId
                             ? .white
@@ -106,13 +106,13 @@ struct AccountManagementCard: View {
             // Account info
             VStack(alignment: .leading, spacing: 2) {
                 Text(account.displayName)
-                    .font(.system(size: 12, weight: .medium, design: theme.fontDesign))
+                    .font(theme.font(size: 12, weight: .medium))
                     .foregroundStyle(theme.textPrimary)
                     .lineLimit(1)
 
                 if let email = account.email {
                     Text(email)
-                        .font(.system(size: 9, weight: .medium, design: theme.fontDesign))
+                        .font(theme.font(size: 9, weight: .medium))
                         .foregroundStyle(theme.textTertiary)
                         .lineLimit(1)
                 }
@@ -131,7 +131,7 @@ struct AccountManagementCard: View {
             // Active indicator
             if account.accountId == provider.activeAccount.accountId {
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 14))
+                    .font(theme.font(size: 14))
                     .foregroundStyle(theme.statusHealthy)
             } else {
                 // Switch button
@@ -139,7 +139,7 @@ struct AccountManagementCard: View {
                     provider.switchAccount(to: account.accountId)
                 } label: {
                     Text("Switch")
-                        .font(.system(size: 9, weight: .medium, design: theme.fontDesign))
+                        .font(theme.font(size: 9, weight: .medium))
                         .foregroundStyle(theme.accentPrimary)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
@@ -162,10 +162,10 @@ struct AccountManagementCard: View {
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: "plus.circle.fill")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(theme.font(size: 12, weight: .semibold))
 
                 Text("Add Account")
-                    .font(.system(size: 11, weight: .medium, design: theme.fontDesign))
+                    .font(theme.font(size: 11, weight: .medium))
             }
             .foregroundStyle(theme.accentPrimary)
             .frame(maxWidth: .infinity)

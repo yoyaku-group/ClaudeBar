@@ -20,7 +20,7 @@ struct ThemeImportButton: View {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "square.and.arrow.down")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(theme.font(size: 10, weight: .semibold))
                     Text("Import Theme")
                         .font(theme.font(size: 11, weight: .medium))
                 }

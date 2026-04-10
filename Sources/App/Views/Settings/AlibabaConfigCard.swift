@@ -80,7 +80,7 @@ struct AlibabaConfigCard: View {
                     .frame(width: 32, height: 32)
 
                 Image(systemName: "cloud.fill")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(theme.font(size: 12, weight: .bold))
                     .foregroundStyle(.white)
             }
 
@@ -185,7 +185,7 @@ struct AlibabaConfigCard: View {
                     if settings.alibaba.hasAlibabaApiKey() {
                         HStack(spacing: 3) {
                             Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: 9))
+                                .font(theme.font(size: 9))
                             Text("Configured")
                                 .font(theme.font(size: 9, weight: .semibold))
                         }
@@ -218,7 +218,7 @@ struct AlibabaConfigCard: View {
                         showAlibabaApiKey.toggle()
                     } label: {
                         Image(systemName: showAlibabaApiKey ? "eye.slash.fill" : "eye.fill")
-                            .font(.system(size: 11))
+                            .font(theme.font(size: 11))
                             .foregroundStyle(theme.textSecondary)
                             .frame(width: 28, height: 28)
                             .background(
@@ -270,7 +270,7 @@ struct AlibabaConfigCard: View {
                     Text("Open Alibaba Cloud Console")
                         .font(theme.font(size: 9, weight: .semibold))
                     Image(systemName: "arrow.up.right")
-                        .font(.system(size: 7, weight: .bold))
+                        .font(theme.font(size: 7, weight: .bold))
                 }
                 .foregroundStyle(theme.accentPrimary)
             }
@@ -284,7 +284,7 @@ struct AlibabaConfigCard: View {
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "trash.fill")
-                            .font(.system(size: 9))
+                            .font(theme.font(size: 9))
                         Text("Remove API Key")
                             .font(theme.font(size: 9, weight: .semibold))
                     }

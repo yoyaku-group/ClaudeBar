@@ -254,7 +254,7 @@ struct MenuContentView: View {
                 // Christmas star sparkle overlay
                 if theme.id == "christmas" {
                     Image(systemName: "sparkle")
-                        .font(.system(size: 10))
+                        .font(theme.font(size: 10))
                         .foregroundStyle(theme.accentPrimary)
                         .offset(x: 14, y: -14)
                 }
@@ -269,7 +269,7 @@ struct MenuContentView: View {
                     // Christmas gift icon
                     if theme.id == "christmas" {
                         Image(systemName: "gift.fill")
-                            .font(.system(size: 12))
+                            .font(theme.font(size: 12))
                             .foregroundStyle(theme.accentPrimary)
                     }
                 }
@@ -464,7 +464,7 @@ struct MenuContentView: View {
     private func compactErrorState(provider: any AIProvider) -> some View {
         HStack(spacing: 8) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 12))
+                .font(theme.font(size: 12))
                 .foregroundStyle(theme.statusWarning)
 
             Text(provider.lastError?.localizedDescription ?? "Unavailable")
@@ -522,7 +522,7 @@ struct MenuContentView: View {
             // Stale indicator
             if snapshot.isStale {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 12))
+                    .font(theme.font(size: 12))
                     .foregroundStyle(theme.statusWarning)
             }
         }
@@ -615,7 +615,7 @@ struct MenuContentView: View {
                     .frame(width: 60, height: 60)
 
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 28))
+                    .font(theme.font(size: 28))
                     .foregroundStyle(theme.statusWarning)
             }
 
@@ -689,7 +689,7 @@ struct MenuContentView: View {
                                 .tint(.white)
                         } else {
                             Image(systemName: "gift.fill")
-                                .font(.system(size: 12, weight: .bold))
+                                .font(theme.font(size: 12, weight: .bold))
                                 .foregroundStyle(.white)
                         }
                     }
@@ -710,7 +710,7 @@ struct MenuContentView: View {
                         .frame(width: 32, height: 32)
 
                     Image(systemName: "gearshape.fill")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(theme.font(size: 12, weight: .bold))
                         .foregroundStyle(theme.textSecondary)
 
                     // Update available indicator
@@ -736,7 +736,7 @@ struct MenuContentView: View {
                         .frame(width: 32, height: 32)
 
                     Image(systemName: "xmark")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(theme.font(size: 12, weight: .bold))
                         .foregroundStyle(theme.textSecondary)
                 }
             }
@@ -818,7 +818,7 @@ struct ProviderPill: View {
         Button(action: action) {
             HStack(spacing: 4) {
                 Image(systemName: providerIcon)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(theme.font(size: 10, weight: .semibold))
 
                 Text(providerName)
                     .font(theme.font(size: 11, weight: .medium))
@@ -892,7 +892,7 @@ struct WrappedStatCard: View {
                 // Left side: icon and type label
                 HStack(spacing: 5) {
                     Image(systemName: iconName)
-                        .font(.system(size: 9, weight: .bold))
+                        .font(theme.font(size: 9, weight: .bold))
                         .foregroundStyle(statusColor)
 
                     Text(quota.quotaType.displayName.uppercased())
@@ -944,7 +944,7 @@ struct WrappedStatCard: View {
             if effectiveDisplayMode == .pace, let insight = quota.paceInsight {
                 HStack(spacing: 3) {
                     Image(systemName: "lightbulb.fill")
-                        .font(.system(size: 7))
+                        .font(theme.font(size: 7))
                     Text(insight)
                         .font(theme.font(size: 8, weight: .medium))
                 }
@@ -992,7 +992,7 @@ struct WrappedStatCard: View {
             if let resetText = quota.resetTimestampDescription ?? quota.resetText ?? quota.resetDescription {
                 HStack(spacing: 3) {
                     Image(systemName: "clock.fill")
-                        .font(.system(size: 7))
+                        .font(theme.font(size: 7))
 
                     Text(resetText)
                         .font(theme.font(size: 8, weight: .medium))
@@ -1091,7 +1091,7 @@ struct WrappedActionButton: View {
                         .tint(theme.textPrimary)
                 } else {
                     Image(systemName: icon)
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(theme.font(size: 12, weight: .semibold))
                 }
 
                 Text(label)
@@ -1321,7 +1321,7 @@ struct UpdateBadge: View {
 
             // Arrow up icon
             Image(systemName: "arrow.up")
-                .font(.system(size: 7, weight: .black))
+                .font(theme.font(size: 7, weight: .black))
                 .foregroundStyle(.white)
         }
     }
@@ -1346,7 +1346,7 @@ struct BedrockUsageCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 5) {
                         Image(systemName: "cloud.fill")
-                            .font(.system(size: 10, weight: .bold))
+                            .font(theme.font(size: 10, weight: .bold))
                             .foregroundStyle(ProviderVisualIdentityLookup.color(for: "bedrock", scheme: colorScheme))
 
                         Text("TODAY'S USAGE")
@@ -1437,7 +1437,7 @@ struct BedrockUsageCard: View {
             // Time period
             HStack(spacing: 3) {
                 Image(systemName: "clock.fill")
-                    .font(.system(size: 8))
+                    .font(theme.font(size: 8))
 
                 Text("Since \(formattedPeriodStart)")
                     .font(theme.font(size: 9, weight: .medium))
@@ -1487,7 +1487,7 @@ private struct StatPill: View {
     var body: some View {
         HStack(spacing: 4) {
             Image(systemName: icon)
-                .font(.system(size: 8, weight: .bold))
+                .font(theme.font(size: 8, weight: .bold))
                 .foregroundStyle(theme.textTertiary)
 
             Text(value)

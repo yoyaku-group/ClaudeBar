@@ -124,7 +124,7 @@ struct BedrockConfigCard: View {
                         Text("Open Bedrock Console")
                             .font(theme.font(size: 9, weight: .semibold))
                         Image(systemName: "arrow.up.right")
-                            .font(.system(size: 7, weight: .bold))
+                            .font(theme.font(size: 7, weight: .bold))
                     }
                     .foregroundStyle(theme.accentPrimary)
                 }
@@ -146,7 +146,7 @@ struct BedrockConfigCard: View {
                         .frame(width: 32, height: 32)
 
                     Image(systemName: "mountain.2.fill")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(theme.font(size: 12, weight: .bold))
                         .foregroundStyle(.white)
                 }
 

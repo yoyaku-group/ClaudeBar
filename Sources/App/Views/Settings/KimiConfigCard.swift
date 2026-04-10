@@ -65,7 +65,7 @@ struct KimiConfigCard: View {
                     .frame(width: 28, height: 28)
 
                 Image(systemName: "terminal")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(theme.font(size: 12, weight: .semibold))
                     .foregroundStyle(theme.accentPrimary)
             }
 
@@ -108,7 +108,7 @@ struct KimiConfigCard: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: "terminal")
-                        .font(.system(size: 10))
+                        .font(theme.font(size: 10))
                         .foregroundStyle(kimiProbeMode == .cli ? theme.accentPrimary : theme.textTertiary)
                         .frame(width: 16)
 
@@ -125,7 +125,7 @@ struct KimiConfigCard: View {
 
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: "network")
-                        .font(.system(size: 10))
+                        .font(theme.font(size: 10))
                         .foregroundStyle(kimiProbeMode == .api ? theme.accentPrimary : theme.textTertiary)
                         .frame(width: 16)
 

@@ -74,7 +74,7 @@ struct MiniMaxConfigCard: View {
                     .frame(width: 32, height: 32)
 
                 Image(systemName: "waveform")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(theme.font(size: 12, weight: .bold))
                     .foregroundStyle(.white)
             }
 
@@ -128,7 +128,7 @@ struct MiniMaxConfigCard: View {
                     if settings.minimax.hasMinimaxApiKey() {
                         HStack(spacing: 3) {
                             Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: 9))
+                                .font(theme.font(size: 9))
                             Text("Configured")
                                 .font(theme.font(size: 9, weight: .semibold))
                         }
@@ -161,7 +161,7 @@ struct MiniMaxConfigCard: View {
                         showMiniMaxApiKey.toggle()
                     } label: {
                         Image(systemName: showMiniMaxApiKey ? "eye.slash.fill" : "eye.fill")
-                            .font(.system(size: 11))
+                            .font(theme.font(size: 11))
                             .foregroundStyle(theme.textSecondary)
                             .frame(width: 28, height: 28)
                             .background(
@@ -258,7 +258,7 @@ struct MiniMaxConfigCard: View {
                         Text("Open MiniMax API Keys")
                             .font(theme.font(size: 9, weight: .semibold))
                         Image(systemName: "arrow.up.right")
-                            .font(.system(size: 7, weight: .bold))
+                            .font(theme.font(size: 7, weight: .bold))
                     }
                     .foregroundStyle(theme.accentPrimary)
                 }
@@ -273,7 +273,7 @@ struct MiniMaxConfigCard: View {
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "trash.fill")
-                            .font(.system(size: 9))
+                            .font(theme.font(size: 9))
                         Text("Remove API Key")
                             .font(theme.font(size: 9, weight: .semibold))
                     }
