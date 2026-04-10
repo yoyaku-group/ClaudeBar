@@ -31,6 +31,7 @@ jobs:
 
       - name: Generate Project
         run: |
+          rm -rf Tuist/.build/tuist-derived
           tuist generate --no-open
           ./scripts/fix-swiftterm-metal.sh
 
