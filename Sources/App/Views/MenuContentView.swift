@@ -1291,6 +1291,7 @@ struct PulsingStatusDot: View {
 /// A polished badge indicating an update is available
 struct UpdateBadge: View {
     var accentColor: Color = BaseTheme.coralAccent
+    @Environment(\.appTheme) private var theme
 
     private var badgeGradient: LinearGradient {
         LinearGradient(
