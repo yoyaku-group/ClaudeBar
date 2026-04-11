@@ -29,9 +29,13 @@ jobs:
       - name: Install Dependencies
         run: tuist install
 
-      - name: Generate Project
+      - name: Clean Tuist Cache
         run: |
           rm -rf Tuist/.build/tuist-derived
+          tuist clean
+
+      - name: Generate Project
+        run: |
           tuist generate --no-open
           ./scripts/fix-swiftterm-metal.sh
 
