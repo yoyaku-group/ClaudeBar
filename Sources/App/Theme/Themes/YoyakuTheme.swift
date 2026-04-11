@@ -2,9 +2,9 @@ import SwiftUI
 
 // MARK: - Yoyaku Theme
 
-/// Dark terminal theme matching Benjamin's iTerm2 profile exactly.
-/// Background: #1D252B, Accent: #5DF1D1 (cyan), Font: monospaced.
-/// Colors extracted from com.googlecode.iterm2.plist.
+/// Dark terminal theme matching Benjamin's iTerm2 "Default" profile dark mode exactly.
+/// Colors extracted from com.googlecode.iterm2.plist (Dark Mode variants).
+/// Font: CaskaydiaCoveNFM-Regular (Caskaydia Cove Nerd Font Mono)
 public struct YoyakuTheme: AppThemeProvider {
     // MARK: - Identity
 
@@ -13,30 +13,32 @@ public struct YoyakuTheme: AppThemeProvider {
     public let icon = "brain.fill"
     public let subtitle: String? = "Terminal"
     public let statusBarIconName: String? = "brain.fill"
-    public var customFontName: String? { "IBMPlexMono" }
+    public var customFontName: String? { "CaskaydiaCoveNFM" }
 
-    // MARK: - iTerm2 Color Palette (exact values from plist)
+    // MARK: - iTerm2 Dark Mode Color Palette (exact values from plist (Dark) keys)
 
     // Backgrounds
-    static let bgDark = Color(red: 0.114, green: 0.145, blue: 0.169)    // #1D252B (iTerm2 BG)
-    static let bgCard = Color(red: 0.16, green: 0.19, blue: 0.22)       // #29313A
-    static let bgSelection = Color(red: 0.22, green: 0.26, blue: 0.30)  // #38424D
+    static let bgDark      = Color(red: 0.1128, green: 0.1475, blue: 0.1661)  // #1C252A
+    static let bgCard      = Color(red: 0.17,   green: 0.21,   blue: 0.23)    // #2B353B
+    static let bgSelection = Color(red: 0.3066, green: 0.4146, blue: 0.4710)  // #4E6978 (Selection BG)
 
     // Foreground / Text
-    static let fg = Color(red: 0.906, green: 0.922, blue: 0.914)        // #E7EBE9 (iTerm2 FG)
-    static let fgBold = Color(red: 0.95, green: 0.96, blue: 0.95)       // #F2F4F2
-    static let fgDim = Color(red: 0.70, green: 0.73, blue: 0.72)        // #B3BAB8
-    static let gray = Color(red: 0.259, green: 0.231, blue: 0.404)      // #423B67 (ANSI 0/black)
+    static let fg      = Color(red: 0.9073, green: 0.9214, blue: 0.9312)  // #E7EAED
+    static let fgBold  = Color(red: 0.9165, green: 0.9167, blue: 0.9165)  // #E9E9E9
+    static let fgDim   = Color(red: 0.6306, green: 0.6917, blue: 0.7232)  // #A0B0B8 (Br.Black)
 
-    // ANSI Colors — exact iTerm2 values
-    static let cyan = Color(red: 0.365, green: 0.945, blue: 0.820)      // #5DF1D1 (ANSI Cyan — PRIMARY)
-    static let cyanDim = Color(red: 0.30, green: 0.78, blue: 0.68)      // dimmed cyan
-    static let red = Color(red: 0.988, green: 0.220, blue: 0.424)       // #FC386C (ANSI Red)
-    static let redBright = Color(red: 0.988, green: 0.275, blue: 0.420) // #FC466B (ANSI Magenta)
-    static let amber = Color(red: 0.996, green: 0.788, blue: 0.290)     // #FEC94A (ANSI Yellow)
-    static let amberBright = Color(red: 1.0, green: 0.85, blue: 0.40)   // brighter yellow
-    static let blue = Color(red: 0.216, green: 0.475, blue: 0.925)      // #3779EC (ANSI Blue)
-    static let green = Color(red: 0.361, green: 0.945, blue: 0.373)     // #5CF15F (ANSI Green)
+    // ANSI Colors — exact iTerm2 dark mode values
+    static let cyan        = Color(red: 0.3486, green: 1.0000, blue: 0.8206)  // #58FFD1 (ANSI Cyan)
+    static let cyanBright  = Color(red: 0.6029, green: 1.0000, blue: 0.9018)  // #99FFE5 (Br.Cyan)
+    static let red         = Color(red: 0.9871, green: 0.2210, blue: 0.2558)  // #FB3841 (ANSI Red)
+    static let redBright   = Color(red: 0.9896, green: 0.4531, blue: 0.4282)  // #FC736D (Br.Red)
+    static let magenta     = Color(red: 0.9865, green: 0.1331, blue: 0.4318)  // #FB216E (ANSI Magenta)
+    static let yellow      = Color(red: 0.9963, green: 0.8167, blue: 0.1973)  // #FED032 (ANSI Yellow)
+    static let yellowBrg   = Color(red: 0.9977, green: 0.8826, blue: 0.4251)  // #FEE16C (Br.Yellow)
+    static let blue        = Color(red: 0.2151, green: 0.7150, blue: 0.9987)  // #36B6FE (ANSI Blue)
+    static let blueBright  = Color(red: 0.4388, green: 0.8107, blue: 0.9990)  // #6FCEFE (Br.Blue)
+    static let green       = Color(red: 0.3620, green: 0.9439, blue: 0.6204)  // #5CF09E (ANSI Green)
+    static let black       = Color(red: 0.2629, green: 0.3562, blue: 0.4025)  // #435A66 (ANSI Black)
 
     // MARK: - Background
 
@@ -60,8 +62,8 @@ public struct YoyakuTheme: AppThemeProvider {
 
     public var cardGradient: LinearGradient { Self.cardGradientValue }
     public var glassBackground: Color { Self.bgCard.opacity(0.8) }
-    public var glassBorder: Color { Self.gray.opacity(0.5) }
-    public var glassHighlight: Color { Self.cyan.opacity(0.15) }
+    public var glassBorder: Color { Self.black.opacity(0.6) }
+    public var glassHighlight: Color { Self.cyan.opacity(0.12) }
     public var cardCornerRadius: CGFloat { 10 }
     public var pillCornerRadius: CGFloat { 12 }
 
@@ -75,14 +77,14 @@ public struct YoyakuTheme: AppThemeProvider {
     // MARK: - Status Colors
 
     public var statusHealthy: Color { Self.cyan }
-    public var statusWarning: Color { Self.amber }
+    public var statusWarning: Color { Self.yellow }
     public var statusCritical: Color { Self.red }
     public var statusDepleted: Color { Self.redBright.opacity(0.7) }
 
     // MARK: - Accents
 
     public var accentPrimary: Color { Self.cyan }
-    public var accentSecondary: Color { Self.cyanDim }
+    public var accentSecondary: Color { Self.cyanBright }
 
     public var accentGradient: LinearGradient {
         LinearGradient(
@@ -95,8 +97,8 @@ public struct YoyakuTheme: AppThemeProvider {
     public var pillGradient: LinearGradient {
         LinearGradient(
             colors: [
-                Self.cyan.opacity(0.25),
-                Self.blue.opacity(0.15)
+                Self.cyan.opacity(0.20),
+                Self.blue.opacity(0.12)
             ],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
@@ -105,7 +107,7 @@ public struct YoyakuTheme: AppThemeProvider {
 
     public var shareGradient: LinearGradient {
         LinearGradient(
-            colors: [Self.amber, Self.amberBright],
+            colors: [Self.yellow, Self.yellowBrg],
             startPoint: .leading,
             endPoint: .trailing
         )
@@ -113,8 +115,8 @@ public struct YoyakuTheme: AppThemeProvider {
 
     // MARK: - Interactive States
 
-    public var hoverOverlay: Color { Self.cyan.opacity(0.1) }
-    public var pressedOverlay: Color { Self.cyan.opacity(0.15) }
+    public var hoverOverlay: Color { Self.cyan.opacity(0.10) }
+    public var pressedOverlay: Color { Self.cyan.opacity(0.16) }
 
     // MARK: - Progress Bar
 
@@ -125,8 +127,8 @@ public struct YoyakuTheme: AppThemeProvider {
     public func progressGradient(for percent: Double) -> LinearGradient {
         let colors: [Color] = switch percent {
         case 0..<20: [Self.red, Self.redBright]
-        case 20..<50: [Self.amber, Self.amberBright]
-        default: [Self.cyan, Self.cyanDim]
+        case 20..<50: [Self.yellow, Self.yellowBrg]
+        default: [Self.cyan, Self.cyanBright]
         }
         return LinearGradient(
             colors: colors,
