@@ -60,4 +60,4 @@ jobs:
         with:
           name: ClaudeBar-YOYAKU
           path: ClaudeBar-YOYAKU.zip
-          retention-days: 30
+          retention-days: 14
