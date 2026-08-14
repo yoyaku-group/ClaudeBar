@@ -1,8 +1,8 @@
 name: Build YOYAKU Theme
 
 on:
-  push:
-    branches: [main]
+  # Manual-only (rules/02 cost discipline): a macOS runner minute bills at 10x a
+  # Linux one — no per-push builds. Trigger from the Actions tab when needed.
   workflow_dispatch:
 
 env:
