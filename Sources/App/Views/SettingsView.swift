@@ -34,7 +34,9 @@ struct SettingsContentView: View {
         static let bedrock = "bedrock"
         static let kimi = "kimi"
         static let minimax = "minimax"
+        static let deepseek = "deepseek"
         static let alibaba = "alibaba"
+        static let vercelGateway = "vercel-gateway"
     }
 
     private var isCopilotEnabled: Bool {
@@ -61,12 +63,20 @@ struct SettingsContentView: View {
         monitor.provider(for: ProviderID.minimax)?.isEnabled ?? false
     }
 
+    private var isDeepSeekEnabled: Bool {
+        monitor.provider(for: ProviderID.deepseek)?.isEnabled ?? false
+    }
+
     private var isBedrockEnabled: Bool {
         monitor.provider(for: ProviderID.bedrock)?.isEnabled ?? false
     }
 
     private var isAlibabaEnabled: Bool {
         monitor.provider(for: ProviderID.alibaba)?.isEnabled ?? false
+    }
+
+    private var isVercelEnabled: Bool {
+        monitor.provider(for: ProviderID.vercelGateway)?.isEnabled ?? false
     }
 
     /// Extension providers that are enabled and have config fields declared in their manifest.
@@ -116,8 +126,16 @@ struct SettingsContentView: View {
                         MiniMaxConfigCard(monitor: monitor)
                             .transition(.opacity.combined(with: .move(edge: .top)))
                     }
+                    if isDeepSeekEnabled {
+                        DeepSeekConfigCard(monitor: monitor)
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
                     if isAlibabaEnabled {
                         AlibabaConfigCard(monitor: monitor)
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
+                    if isVercelEnabled {
+                        VercelConfigCard(monitor: monitor)
                             .transition(.opacity.combined(with: .move(edge: .top)))
                     }
                     if isCopilotEnabled {
@@ -236,6 +254,11 @@ struct SettingsContentView: View {
         VStack(alignment: .leading, spacing: 12) {
             displayModeHeader
             displayModeToggle
+            menuBarPercentageToggle
+            menuBarDurationToggle
+            if settings.menuBarPercentageEnabled || settings.menuBarDurationEnabled {
+                menuBarControls
+            }
             dailyUsageCardsToggle
         }
         .padding(14)
@@ -266,7 +289,7 @@ struct SettingsContentView: View {
                     .font(theme.font(size: 14, weight: .bold))
                     .foregroundStyle(theme.textPrimary)
 
-                Text("Show remaining or used percentage")
+                Text("Show remaining, used, or pace")
                     .font(theme.font(size: 10, weight: .medium))
                     .foregroundStyle(theme.textTertiary)
             }
@@ -287,6 +310,273 @@ struct SettingsContentView: View {
                     }
                 }
             }
+        }
+    }
+
+    private var menuBarProviders: [any AIProvider] {
+        monitor.enabledProviders
+    }
+
+    private var selectedMenuBarProvider: (any AIProvider)? {
+        menuBarProviders.first { $0.id == settings.menuBarPercentageProviderId }
+            ?? monitor.selectedProvider
+            ?? menuBarProviders.first
+    }
+
+    private var menuBarQuotaOptions: [UsageQuota] {
+        selectedMenuBarProvider?.snapshot?.quotas ?? []
+    }
+
+    private var menuBarPercentageToggle: some View {
+        HStack {
+            Text("Show Percentage in Menu Bar")
+                .font(theme.font(size: 12, weight: .medium))
+                .foregroundStyle(theme.textSecondary)
+
+            Spacer()
+
+            Toggle("", isOn: Binding(
+                get: { settings.menuBarPercentageEnabled },
+                set: { enabled in
+                    settings.menuBarPercentageEnabled = enabled
+                    if enabled {
+                        normalizeMenuBarSelection()
+                    }
+                }
+            ))
+            .toggleStyle(.switch)
+            .tint(theme.accentPrimary)
+            .scaleEffect(0.8)
+            .labelsHidden()
+        }
+    }
+
+    private var menuBarDurationToggle: some View {
+        HStack {
+            Text("Show Duration in Menu Bar")
+                .font(theme.font(size: 12, weight: .medium))
+                .foregroundStyle(theme.textSecondary)
+
+            Spacer()
+
+            Toggle("", isOn: Binding(
+                get: { settings.menuBarDurationEnabled },
+                set: { enabled in
+                    settings.menuBarDurationEnabled = enabled
+                    if enabled {
+                        normalizeMenuBarSelection()
+                    }
+                }
+            ))
+            .toggleStyle(.switch)
+            .tint(theme.accentPrimary)
+            .scaleEffect(0.8)
+            .labelsHidden()
+        }
+    }
+
+    /// Opt-in stacked rendering for the dual-window label: the two windows
+    /// draw as two smaller lines instead of one long "A | B" line, roughly
+    /// halving the menu bar width the label occupies.
+    private var menuBarStackedToggle: some View {
+        HStack {
+            Text("Stack in Menu Bar")
+                .font(theme.font(size: 12, weight: .medium))
+                .foregroundStyle(theme.textSecondary)
+
+            Spacer()
+
+            Toggle("", isOn: Binding(
+                get: { settings.menuBarStackedEnabled },
+                set: { enabled in
+                    settings.menuBarStackedEnabled = enabled
+                }
+            ))
+            .toggleStyle(.switch)
+            .tint(theme.accentPrimary)
+            .scaleEffect(0.8)
+            .labelsHidden()
+        }
+    }
+
+    /// Size selector for the stacked lines. Small is the original 9pt
+    /// rendering; Medium and Large enlarge both lines to 10pt and 11pt while
+    /// the renderer keeps their ink inside the menu bar's height limit.
+    /// Rendered as a labelled chip row (like PROVIDER and QUOTA above) so the
+    /// control speaks the section's choice-button language instead of a
+    /// system segmented picker.
+    private var menuBarStackedSizePicker: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("STACKED TEXT SIZE")
+                .font(theme.font(size: 9, weight: .semibold))
+                .foregroundStyle(theme.textSecondary)
+                .tracking(0.5)
+
+            HStack(spacing: 8) {
+                ForEach(MenuBarStackedSize.allCases, id: \.self) { size in
+                    MenuBarChoiceButton(
+                        iconName: size.choiceIconName,
+                        label: size.displayLabel,
+                        isSelected: settings.menuBarStackedSize == size
+                    ) {
+                        settings.menuBarStackedSize = size
+                    }
+                }
+            }
+        }
+    }
+
+    private var menuBarControls: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("PROVIDER")
+                    .font(theme.font(size: 9, weight: .semibold))
+                    .foregroundStyle(theme.textSecondary)
+                    .tracking(0.5)
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(menuBarProviders, id: \.id) { provider in
+                            MenuBarProviderChoiceButton(
+                                providerId: provider.id,
+                                providerName: provider.name,
+                                isSelected: settings.menuBarPercentageProviderId == provider.id
+                            ) {
+                                settings.menuBarPercentageProviderId = provider.id
+                                selectFirstMenuBarQuotaIfNeeded(force: true)
+                                normalizeSecondaryMenuBarSelection()
+                            }
+                        }
+                    }
+                }
+                .disabled(menuBarProviders.isEmpty)
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("QUOTA")
+                    .font(theme.font(size: 9, weight: .semibold))
+                    .foregroundStyle(theme.textSecondary)
+                    .tracking(0.5)
+
+                if menuBarQuotaOptions.isEmpty {
+                    Text("No quota data")
+                        .font(theme.font(size: 11, weight: .medium))
+                        .foregroundStyle(theme.textTertiary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                        .background(
+                            RoundedRectangle(cornerRadius: theme.pillCornerRadius)
+                                .fill(theme.glassBackground)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: theme.pillCornerRadius)
+                                        .stroke(theme.glassBorder, lineWidth: 1)
+                                )
+                        )
+                } else {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(menuBarQuotaOptions, id: \.quotaType.quotaKey) { quota in
+                                MenuBarQuotaChoiceButton(
+                                    title: quota.menuBarTitle ?? quota.quotaType.displayName,
+                                    isSelected: settings.menuBarPercentageQuotaKey == quota.quotaType.quotaKey
+                                ) {
+                                    settings.menuBarPercentageQuotaKey = quota.quotaType.quotaKey
+                                    normalizeSecondaryMenuBarSelection()
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if menuBarQuotaOptions.count > 1 {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("SECONDARY QUOTA")
+                        .font(theme.font(size: 9, weight: .semibold))
+                        .foregroundStyle(theme.textSecondary)
+                        .tracking(0.5)
+
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            MenuBarChoiceButton(
+                                iconName: "minus.circle",
+                                label: "None",
+                                isSelected: settings.menuBarSecondaryQuotaKey.isEmpty
+                            ) {
+                                settings.menuBarSecondaryQuotaKey = ""
+                            }
+
+                            ForEach(secondaryMenuBarQuotaOptions, id: \.quotaType.quotaKey) { quota in
+                                MenuBarQuotaChoiceButton(
+                                    title: quota.menuBarTitle ?? quota.quotaType.displayName,
+                                    isSelected: settings.menuBarSecondaryQuotaKey == quota.quotaType.quotaKey
+                                ) {
+                                    settings.menuBarSecondaryQuotaKey = quota.quotaType.quotaKey
+                                }
+                            }
+                        }
+                    }
+
+                    // Stacking only changes how two windows render, so the
+                    // toggle appears once a secondary window is selected.
+                    if !settings.menuBarSecondaryQuotaKey.isEmpty {
+                        menuBarStackedToggle
+
+                        // The size only matters while stacking is actually
+                        // rendering, so it appears with the toggle on.
+                        if settings.menuBarStackedEnabled {
+                            menuBarStackedSizePicker
+                        }
+                    }
+                }
+            }
+        }
+        .onAppear {
+            normalizeMenuBarSelection()
+            normalizeSecondaryMenuBarSelection()
+        }
+    }
+
+    /// Quota options offered for the optional secondary menu bar window,
+    /// excluding the one already chosen as primary.
+    private var secondaryMenuBarQuotaOptions: [UsageQuota] {
+        menuBarQuotaOptions.filter {
+            $0.quotaType.quotaKey != settings.menuBarPercentageQuotaKey
+        }
+    }
+
+    /// Clears a stored secondary quota key that is no longer offered — e.g. after it
+    /// becomes equal to the primary, or the chosen provider's quotas no longer include it.
+    private func normalizeSecondaryMenuBarSelection() {
+        guard !settings.menuBarSecondaryQuotaKey.isEmpty else { return }
+        // An empty options list means quota data has not loaded yet (cold
+        // start, provider still syncing), not that the stored selection is
+        // invalid. Clearing here would silently discard the user's secondary
+        // window on any settings interaction during a sync.
+        let validKeys = Set(secondaryMenuBarQuotaOptions.map(\.quotaType.quotaKey))
+        guard !validKeys.isEmpty else { return }
+        if !validKeys.contains(settings.menuBarSecondaryQuotaKey) {
+            settings.menuBarSecondaryQuotaKey = ""
+        }
+    }
+
+    private func normalizeMenuBarSelection() {
+        if let provider = selectedMenuBarProvider,
+           settings.menuBarPercentageProviderId != provider.id {
+            settings.menuBarPercentageProviderId = provider.id
+        }
+        selectFirstMenuBarQuotaIfNeeded(force: false)
+    }
+
+    private func selectFirstMenuBarQuotaIfNeeded(force: Bool) {
+        guard let firstQuota = menuBarQuotaOptions.first else { return }
+        let currentQuotaExists = menuBarQuotaOptions.contains {
+            $0.quotaType.quotaKey == settings.menuBarPercentageQuotaKey
+        }
+
+        if force || !currentQuotaExists {
+            settings.menuBarPercentageQuotaKey = firstQuota.quotaType.quotaKey
         }
     }
 
@@ -900,26 +1190,23 @@ struct SettingsContentView: View {
 
             VStack(alignment: .leading, spacing: 14) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("SYNC INTERVAL")
+                    Text("REFRESH INTERVAL")
                         .font(theme.font(size: 9, weight: .semibold))
                         .foregroundStyle(theme.textSecondary)
                         .tracking(0.5)
 
-                    Picker("", selection: $settings.backgroundSyncInterval) {
-                        Text("30 seconds").tag(30.0)
-                        Text("1 minute").tag(60.0)
-                        Text("2 minutes").tag(120.0)
-                        Text("5 minutes").tag(300.0)
+                    Picker("", selection: $settings.refreshInterval) {
+                        ForEach(RefreshInterval.allCases, id: \.self) { interval in
+                            Text(interval.label).tag(interval)
+                        }
                     }
                     .pickerStyle(.segmented)
-                    .disabled(!settings.backgroundSyncEnabled)
                 }
 
-                Text("Sync usage data in the background so it's always fresh when you check.")
+                Text("Keep the menu-bar number fresh in the background. \"Off\" updates only when you open the menu. Never refreshes faster than once a minute.")
                     .font(theme.font(size: 9, weight: .semibold))
                     .foregroundStyle(theme.textTertiary)
             }
-            .opacity(settings.backgroundSyncEnabled ? 1 : 0.6)
         } label: {
             backgroundSyncHeader
                 .contentShape(.rect)
@@ -973,11 +1260,11 @@ struct SettingsContentView: View {
 
             Spacer()
 
-            Toggle("", isOn: $settings.backgroundSyncEnabled)
-                .toggleStyle(.switch)
-                .tint(theme.accentPrimary)
-                .scaleEffect(0.8)
-                .labelsHidden()
+            // The on/off control now lives in the picker's "Off" case; show the
+            // current cadence here so it's visible while the card is collapsed.
+            Text(settings.refreshInterval.label)
+                .font(theme.font(size: 11, weight: .semibold))
+                .foregroundStyle(theme.textSecondary)
         }
     }
 
@@ -1303,6 +1590,88 @@ struct DisplayModeButton: View {
                 RoundedRectangle(cornerRadius: 8)
                     .stroke(isSelected ? theme.accentPrimary.opacity(0.5) : theme.glassBorder, lineWidth: 1)
             )
+    }
+}
+
+// MARK: - Menu Bar Percentage Choice Buttons
+
+struct MenuBarProviderChoiceButton: View {
+    let providerId: String
+    let providerName: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        MenuBarChoiceButton(
+            iconName: ProviderVisualIdentityLookup.symbolIcon(for: providerId),
+            label: providerName,
+            isSelected: isSelected,
+            action: action
+        )
+    }
+}
+
+struct MenuBarQuotaChoiceButton: View {
+    let title: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        MenuBarChoiceButton(
+            iconName: "gauge.with.needle.fill",
+            label: title,
+            isSelected: isSelected,
+            action: action
+        )
+    }
+}
+
+struct MenuBarChoiceButton: View {
+    let iconName: String
+    let label: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    @Environment(\.appTheme) private var theme
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: iconName)
+                    .font(.system(size: 10, weight: .bold))
+
+                Text(label)
+                    .font(theme.font(size: 11, weight: .semibold))
+                    .lineLimit(1)
+            }
+            .foregroundStyle(isSelected ? selectedForeground : theme.textSecondary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(buttonBackground)
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
+    }
+
+    private var selectedForeground: Color {
+        theme.id == "cli" ? theme.textPrimary : .white
+    }
+
+    private var buttonBackground: some View {
+        ZStack {
+            if isSelected {
+                RoundedRectangle(cornerRadius: theme.pillCornerRadius)
+                    .fill(theme.accentGradient)
+                    .shadow(color: theme.accentPrimary.opacity(0.25), radius: 5, y: 2)
+            } else {
+                RoundedRectangle(cornerRadius: theme.pillCornerRadius)
+                    .fill(isHovering ? theme.hoverOverlay : theme.glassBackground)
+            }
+
+            RoundedRectangle(cornerRadius: theme.pillCornerRadius)
+                .stroke(isSelected ? theme.accentPrimary.opacity(0.5) : theme.glassBorder, lineWidth: 1)
+        }
     }
 }
 

@@ -25,6 +25,8 @@ struct UsageQuotaTests {
         #expect(quota.percentRemaining == 65)
         #expect(quota.quotaType == QuotaType.session)
         #expect(quota.providerId == "claude")
+        #expect(quota.dollarUsed == nil)
+        #expect(quota.dollarCap == nil)
     }
 
     @Test
@@ -106,6 +108,56 @@ struct UsageQuotaTests {
 
         // Then
         #expect(quota.resetTimestampDescription == nil)
+    }
+
+    // MARK: - Compact Reset Time
+
+    @Test
+    func `compactResetTime shows days when over a day remains`() {
+        let resetDate = Date().addingTimeInterval(2.0 * 86400 + 5.0 * 3600 + 30)
+        let quota = UsageQuota(percentRemaining: 35, quotaType: .weekly, providerId: "claude", resetsAt: resetDate)
+        #expect(quota.compactResetTime == "2d")
+    }
+
+    @Test
+    func `compactResetTime shows hours and minutes when under a day`() {
+        let resetDate = Date().addingTimeInterval(3.0 * 3600 + 58.0 * 60 + 30)
+        let quota = UsageQuota(percentRemaining: 35, quotaType: .weekly, providerId: "claude", resetsAt: resetDate)
+        #expect(quota.compactResetTime == "3:58")
+    }
+
+    @Test
+    func `compactResetTime pads minutes to two digits`() {
+        let resetDate = Date().addingTimeInterval(5.0 * 3600 + 5.0 * 60 + 30)
+        let quota = UsageQuota(percentRemaining: 35, quotaType: .weekly, providerId: "claude", resetsAt: resetDate)
+        #expect(quota.compactResetTime == "5:05")
+    }
+
+    @Test
+    func `compactResetTime shows whole hours with zero minutes`() {
+        let resetDate = Date().addingTimeInterval(3.0 * 3600 + 30)
+        let quota = UsageQuota(percentRemaining: 35, quotaType: .weekly, providerId: "claude", resetsAt: resetDate)
+        #expect(quota.compactResetTime == "3:00")
+    }
+
+    @Test
+    func `compactResetTime shows minutes when under an hour`() {
+        let resetDate = Date().addingTimeInterval(45.0 * 60 + 30)
+        let quota = UsageQuota(percentRemaining: 35, quotaType: .weekly, providerId: "claude", resetsAt: resetDate)
+        #expect(quota.compactResetTime == "45m")
+    }
+
+    @Test
+    func `compactResetTime shows soon when under a minute`() {
+        let resetDate = Date().addingTimeInterval(30)
+        let quota = UsageQuota(percentRemaining: 35, quotaType: .weekly, providerId: "claude", resetsAt: resetDate)
+        #expect(quota.compactResetTime == "soon")
+    }
+
+    @Test
+    func `compactResetTime is nil without reset date`() {
+        let quota = UsageQuota(percentRemaining: 35, quotaType: .weekly, providerId: "claude")
+        #expect(quota.compactResetTime == nil)
     }
 
     // MARK: - Quota Types
@@ -343,6 +395,65 @@ struct UsageQuotaTests {
         #expect(quota.formattedDollarRemaining == nil)
     }
 
+    @Test
+    func `formattedDollarRemaining uses CNY symbol when currency is CNY`() {
+        // Given
+        let quota = UsageQuota(percentRemaining: 100, quotaType: .modelSpecific("Balance"), providerId: "deepseek", dollarRemaining: Decimal(110), currency: "CNY")
+
+        // When & Then
+        #expect(quota.formattedDollarRemaining == "¥110.00")
+    }
+
+    @Test
+    func `formattedDollarRemaining defaults to dollar symbol when currency is nil or USD`() {
+        // Given
+        let nilCurrency = UsageQuota(percentRemaining: 100, quotaType: .modelSpecific("Balance"), providerId: "deepseek", dollarRemaining: Decimal(40))
+        let usdCurrency = UsageQuota(percentRemaining: 100, quotaType: .modelSpecific("Balance"), providerId: "deepseek", dollarRemaining: Decimal(40), currency: "USD")
+
+        // When & Then
+        #expect(nilCurrency.formattedDollarRemaining == "$40.00")
+        #expect(usdCurrency.formattedDollarRemaining == "$40.00")
+    }
+
+    @Test
+    func `currencySymbol maps common codes and falls back to code`() {
+        // When & Then
+        #expect(UsageQuota.currencySymbol(for: "USD") == "$")
+        #expect(UsageQuota.currencySymbol(for: "CNY") == "¥")
+        #expect(UsageQuota.currencySymbol(for: "cny") == "¥") // case-insensitive
+        #expect(UsageQuota.currencySymbol(for: "EUR") == "€")
+        #expect(UsageQuota.currencySymbol(for: "XYZ") == "XYZ ")
+    }
+
+    @Test
+    func `quota stores capped dollar spend amounts`() {
+        let quota = UsageQuota(
+            percentRemaining: 75,
+            quotaType: .timeLimit("Claude Extra"),
+            providerId: "omp",
+            dollarUsed: Decimal(string: "123.45"),
+            dollarCap: 500
+        )
+
+        #expect(quota.dollarUsed == Decimal(string: "123.45"))
+        #expect(quota.dollarCap == 500)
+        #expect(quota.dollarRemaining == nil)
+    }
+
+    @Test
+    func `formats capped zero spend at a glance`() {
+        let quota = UsageQuota(
+            percentRemaining: 100,
+            quotaType: .timeLimit("Claude Extra"),
+            providerId: "omp",
+            dollarUsed: 0,
+            dollarCap: 500
+        )
+
+        #expect(quota.formattedDollarUsed == "$0.00")
+        #expect(quota.formattedDollarCap == "$500")
+    }
+
     // MARK: - Burn Rate
 
     @Test
@@ -399,5 +510,76 @@ struct UsageQuotaTests {
         let quota = UsageQuota(percentRemaining: 35, quotaType: .session, providerId: "claude")
         // No reset time → falls back to absolute: 35% remaining → warning
         #expect(quota.paceAwareStatus(burnRateThreshold: 1.5) == .warning)
+    }
+
+    // MARK: - Window Duration Override
+
+    @Test
+    func `percentTimeElapsed uses explicit windowDuration over quota type duration`() {
+        // A .timeLimit quota defaults to a 7-day window; an explicit 5h
+        // window (as reported by aggregating probes like Oh My Pi) must win.
+        let resetsAt = Date().addingTimeInterval(2.5 * 3600) // half of a 5h window left
+        let quota = UsageQuota(
+            percentRemaining: 50,
+            quotaType: .timeLimit("Claude 5h"),
+            providerId: "omp",
+            resetsAt: resetsAt,
+            windowDuration: 5 * 3600
+        )
+        let elapsed = quota.percentTimeElapsed!
+        #expect(elapsed > 49 && elapsed < 51)
+    }
+
+    @Test
+    func `percentTimeElapsed falls back to quota type duration without windowDuration`() {
+        let resetsAt = Date().addingTimeInterval(3.5 * 24 * 3600) // half of the default 7d left
+        let quota = UsageQuota(
+            percentRemaining: 50,
+            quotaType: .timeLimit("Anything"),
+            providerId: "omp",
+            resetsAt: resetsAt
+        )
+        let elapsed = quota.percentTimeElapsed!
+        #expect(elapsed > 49 && elapsed < 51)
+    }
+
+    @Test
+    func `paceTickHelp explains expected remaining in remaining mode`() {
+        // 75% of a 5h window elapsed -> steady usage would leave ~25%.
+        let quota = UsageQuota(
+            percentRemaining: 43,
+            quotaType: .timeLimit("Z.ai 5h"),
+            providerId: "zai",
+            resetsAt: Date().addingTimeInterval(1.25 * 3600),
+            windowDuration: 5 * 3600
+        )
+        let help = quota.paceTickHelp(mode: .remaining)!
+        #expect(help.contains("~25% remaining"))
+        // 57 used vs 75 elapsed -> below expected usage, surfaced inline.
+        #expect(help.contains("below expected usage"))
+    }
+
+    @Test
+    func `paceTickHelp uses consumed wording in used mode`() {
+        let quota = UsageQuota(
+            percentRemaining: 43,
+            quotaType: .timeLimit("Z.ai 5h"),
+            providerId: "zai",
+            resetsAt: Date().addingTimeInterval(1.25 * 3600),
+            windowDuration: 5 * 3600
+        )
+        let help = quota.paceTickHelp(mode: .used)!
+        #expect(help.contains("~75%"))
+        #expect(help.contains("used"))
+    }
+
+    @Test
+    func `paceTickHelp is nil without reset time`() {
+        let quota = UsageQuota(
+            percentRemaining: 43,
+            quotaType: .timeLimit("MCP"),
+            providerId: "zai"
+        )
+        #expect(quota.paceTickHelp(mode: .remaining) == nil)
     }
 }

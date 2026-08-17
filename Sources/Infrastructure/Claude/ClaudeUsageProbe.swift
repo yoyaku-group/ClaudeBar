@@ -283,21 +283,21 @@ public final class ClaudeUsageProbe: UsageProbe, @unchecked Sendable {
         // CLI /usage tab no longer includes account details since v2.1.79+
         let accountInfo = accountInfoResolver.resolve()
 
-        // API Usage Billing accounts don't have quota data - fall back to /cost
-        if accountTier == .claudeApi {
-            AppLog.probes.info("Detected API Usage Billing account, falling back to /cost")
-            throw ProbeError.subscriptionRequired
-        }
+        // Note: pay-as-you-go API accounts are caught earlier by extractUsageError()
+        // via the "/usage is only available for subscription plans" message and routed
+        // to /cost. detectAccountType() classifies by header/quota only.
 
         // Extract percentages
         let sessionPct = extractPercent(labelSubstring: "Current session", text: clean)
         let weeklyPct = extractPercent(labelSubstring: "Current week (all models)", text: clean)
-        // Check for model-specific quota (Opus or Sonnet)
+        // Check for model-specific quota (Opus, Sonnet, or Fable)
         let opusPct = extractPercent(labelSubstring: "Current week (Opus)", text: clean)
         let sonnetPct = extractPercent(labelSubstrings: [
             "Current week (Sonnet only)",
             "Current week (Sonnet)",
         ], text: clean)
+        // Paren-open anchor also matches a future "Current week (Fable 5)" label
+        let fablePct = extractPercent(labelSubstring: "Current week (Fable", text: clean)
 
         guard let sessionPct else {
             AppLog.probes.error("Claude parse failed: could not find 'Current session' percentage in output")
@@ -351,6 +351,21 @@ public final class ClaudeUsageProbe: UsageProbe, @unchecked Sendable {
             ))
         }
 
+        if let fablePct {
+            // Promotional Fable window can reset at a different time than the
+            // all-models weekly, so anchor on its own section before falling back.
+            // The model key must match what the API probe derives from the scoped
+            // limit's display name ("fable").
+            let fableReset = extractReset(labelSubstring: "Current week (Fable", text: clean) ?? weeklyReset
+            quotas.append(UsageQuota(
+                percentRemaining: Double(fablePct),
+                quotaType: .modelSpecific("fable"),
+                providerId: "claude",
+                resetsAt: parseResetDate(fableReset),
+                resetText: cleanResetText(fableReset)
+            ))
+        }
+
         // Extract Extra usage for Pro accounts (if enabled)
         let extraUsage = extractExtraUsage(clean)
 
@@ -387,16 +402,12 @@ public final class ClaudeUsageProbe: UsageProbe, @unchecked Sendable {
             return .claudeMax
         }
 
-        // Check for API Usage Billing in header (e.g., "Sonnet 4.5 · API Usage Billing")
-        // This is the ONLY case that should return .claudeApi (pay-as-you-go without quotas)
-        if lower.contains("api usage billing") {
-            AppLog.probes.info("Detected API Usage Billing account from header")
-            return .claudeApi
-        }
-
-        // Note: "Claude API" accounts (e.g., "Sonnet 4.5 · Claude API") are subscription
-        // accounts with quotas, so we should NOT treat them as .claudeApi here.
-        // They will fall through to the quota-based detection below.
+        // Pay-as-you-go API accounts are detected by extractUsageError() via the
+        // "/usage is only available for subscription plans" message — not here.
+        // The "API Usage Billing" header substring is NOT a reliable classifier on its
+        // own: subscription accounts with Extra Usage credits show the same substring
+        // alongside valid quota bars. We classify only by Pro/Max header and quota
+        // presence, defaulting to .claudeMax for any subscription-like output.
 
         // Fallback: Check for presence of quota data (subscription accounts have quotas)
         let hasSessionQuota = lower.contains("current session") && (lower.contains("% left") || lower.contains("% used"))
@@ -452,6 +463,7 @@ public final class ClaudeUsageProbe: UsageProbe, @unchecked Sendable {
                     budget: costInfo.budget,
                     apiDuration: 0,
                     providerId: "claude",
+                    kind: .extraUsage,
                     capturedAt: Date(),
                     resetsAt: resetDate,
                     resetText: cleanResetText(resetText)
@@ -704,6 +716,12 @@ public final class ClaudeUsageProbe: UsageProbe, @unchecked Sendable {
         // Using the *last* occurrence handles both start-of-line "Resets Jan 1, 2026"
         // and mid-line "$5.41 ... · Resets Jan 1, 2026 (America/New_York)".
         var cleaned = text
+
+        // Strip trailing "NN% used" or "NN% left" — in newer CLI formats the reset text
+        // and percentage share the same line (e.g., "Resets 3pm (Europe/Amsterdam)  27% used")
+        cleaned = cleaned
+            .replacingOccurrences(of: #"\s+\d{1,3}%\s*(?:used|left)\s*$"#, with: "", options: .regularExpression)
+
         if let lastResets = cleaned.range(of: "resets", options: [.caseInsensitive, .backwards]) {
             cleaned = String(cleaned[lastResets.upperBound...])
         }
@@ -851,6 +869,11 @@ public final class ClaudeUsageProbe: UsageProbe, @unchecked Sendable {
         if lower.contains("update required") || lower.contains("please update") {
             AppLog.probes.error("Claude probe failed: CLI update required")
             return .updateRequired
+        }
+
+        if lower.contains("/usage is only available for subscription plans") {
+            AppLog.probes.info("Claude /usage unavailable for this account: subscription required")
+            return .subscriptionRequired
         }
 
         // Check for rate limit errors, but exclude promotional messages like "rate limits are 2x higher"

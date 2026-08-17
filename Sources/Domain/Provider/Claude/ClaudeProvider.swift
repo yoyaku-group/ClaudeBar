@@ -4,8 +4,9 @@ import Observation
 /// Claude AI provider - a rich domain model.
 /// Observable class with its own state (isSyncing, snapshot, error).
 /// Supports dual probe modes: CLI (default) and API.
+@MainActor
 @Observable
-public final class ClaudeProvider: AIProvider, @unchecked Sendable {
+public final class ClaudeProvider: AIProvider {
     // MARK: - Identity (Protocol Requirement)
 
     public let id: String = "claude"
@@ -44,6 +45,11 @@ public final class ClaudeProvider: AIProvider, @unchecked Sendable {
     /// Whether the provider is currently fetching passes
     public private(set) var isFetchingPasses: Bool = false
 
+    /// The last error from a guest pass fetch (nil when the last fetch succeeded).
+    /// Kept separate from `lastError` so a failed invitation-link fetch never
+    /// makes the provider's usage data look unavailable.
+    public private(set) var passError: Error?
+
     // MARK: - Probe Mode
 
     /// The current probe mode (CLI or API)
@@ -59,6 +65,18 @@ public final class ClaudeProvider: AIProvider, @unchecked Sendable {
             if let claudeSettings = settingsRepository as? ClaudeSettingsRepository {
                 claudeSettings.setClaudeProbeMode(newValue)
             }
+        }
+    }
+
+    /// Background poll cadence floor. In API mode, background refreshes are
+    /// floored at 15 min to match `ClaudeAPIUsageProbe`'s snapshot-cache TTL:
+    /// polling faster only re-serves the cache (or, once expired, risks 429s),
+    /// so there's no benefit to a tighter background cadence (issue #204). CLI
+    /// mode keeps the user's chosen interval (no floor).
+    public var backgroundRefreshFloor: Duration? {
+        switch probeMode {
+        case .api: return .seconds(900)
+        case .cli: return nil
         }
     }
 
@@ -156,33 +174,77 @@ public final class ClaudeProvider: AIProvider, @unchecked Sendable {
     }
 
     /// Refreshes the usage data and updates the snapshot.
-    /// Uses the active probe based on current probe mode.
-    /// Sets isSyncing during refresh and captures any errors.
+    /// Interactive refresh: delegates to the kind-aware implementation.
     @discardableResult
     public func refresh() async throws -> UsageSnapshot {
+        try await refresh(.interactive)
+    }
+
+    /// Refreshes the usage data and updates the snapshot.
+    /// Uses the active probe based on current probe mode.
+    /// Sets isSyncing during refresh and captures any errors.
+    ///
+    /// The probe and fallback behaviour are identical for both kinds — CLI stays
+    /// CLI, the rate-limit short-circuit still holds. The only difference is that
+    /// a `.background` refresh skips the daily-usage JSONL scan
+    /// (`attachDailyReport`), which the menu-bar label never shows; that scan
+    /// runs only when the dropdown is open, which always refreshes interactively
+    /// (issue #204).
+    @discardableResult
+    public func refresh(_ kind: RefreshKind) async throws -> UsageSnapshot {
         isSyncing = true
         defer { isSyncing = false }
 
         do {
             let newSnapshot = try await primaryProbe().probe()
-            snapshot = await attachDailyReport(to: newSnapshot)
+            snapshot = await report(for: newSnapshot, kind: kind)
             lastError = nil
             return snapshot!
-        } catch {
-            if let fallback = await fallbackProbe() {
+        } catch let primaryError {
+            if Self.shouldAttemptFallback(after: primaryError),
+               let fallback = await fallbackProbe() {
                 do {
                     let newSnapshot = try await fallback.probe()
-                    snapshot = await attachDailyReport(to: newSnapshot)
+                    snapshot = await report(for: newSnapshot, kind: kind)
                     lastError = nil
                     return snapshot!
                 } catch {
-                    lastError = error
-                    throw error
+                    // Both probes failed. Surface the primary error — it is
+                    // the actual root cause (e.g. HTTP 429). The fallback's
+                    // failure is incidental and would otherwise mask it,
+                    // sending users chasing the wrong problem.
+                    lastError = primaryError
+                    throw primaryError
                 }
             }
 
-            lastError = error
-            throw error
+            lastError = primaryError
+            throw primaryError
+        }
+    }
+
+    /// Decides whether the fallback probe should run after the primary fails.
+    /// Rate-limit failures are an upstream per-token throttle: the CLI talks
+    /// to the same Anthropic backend, so the fallback can't help and would
+    /// just amplify the problem. Surface the rate-limit error immediately so
+    /// the backoff window does its job. All other failure modes (auth,
+    /// parse, network, etc.) still try the fallback — those can legitimately
+    /// be recovered by the alternate probe path.
+    private static func shouldAttemptFallback(after error: Error) -> Bool {
+        if case ProbeError.rateLimited = error { return false }
+        return true
+    }
+
+    /// Attaches the daily-usage report for interactive refreshes only.
+    /// Background refreshes (the menu-bar poll) skip the JSONL scan to stay cheap
+    /// — the menu-bar label never renders the daily report, and the dropdown that
+    /// does always refreshes interactively (issue #204).
+    private func report(for snapshot: UsageSnapshot, kind: RefreshKind) async -> UsageSnapshot {
+        switch kind {
+        case .interactive:
+            return await attachDailyReport(to: snapshot)
+        case .background:
+            return snapshot
         }
     }
 
@@ -250,17 +312,25 @@ public final class ClaudeProvider: AIProvider, @unchecked Sendable {
         do {
             let pass = try await passProbe.probe()
             guestPass = pass
-            lastError = nil
+            passError = nil
             return pass
         } catch {
-            lastError = error
+            passError = error
             throw error
         }
     }
 
-    /// Whether guest passes feature is available
+    /// Dismisses the last guest pass error.
+    public func clearPassError() {
+        passError = nil
+    }
+
+    /// Whether the guest passes feature is available.
+    /// Requires both a configured probe and a Max account — Anthropic issues
+    /// invitation links to Max subscribers only, and an unknown tier is not
+    /// evidence of one (issue #243).
     public var supportsGuestPasses: Bool {
-        passProbe != nil
+        passProbe != nil && snapshot?.accountTier?.supportsGuestPasses == true
     }
 
     /// Whether API mode is available (API probe was provided)

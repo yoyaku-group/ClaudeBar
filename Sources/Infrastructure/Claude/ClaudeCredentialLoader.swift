@@ -58,6 +58,20 @@ public struct ClaudeCredentialLoader: Sendable {
     /// Refresh buffer: 5 minutes before expiration
     private static let refreshBufferMs: Double = 5 * 60 * 1000
 
+    static func keychainSaveArguments(
+        service: String,
+        account: String,
+        password: String
+    ) -> [String] {
+        [
+            "add-generic-password",
+            "-U",
+            "-s", service,
+            "-a", account,
+            "-w", password
+        ]
+    }
+
     public init(
         homeDirectory: String = NSHomeDirectory(),
         keychainService: String = "Claude Code-credentials",
@@ -261,19 +275,13 @@ public struct ClaudeCredentialLoader: Sendable {
             return
         }
 
-        // Delete existing item first (ignore errors if not found)
-        let deleteProcess = Process()
-        deleteProcess.executableURL = URL(fileURLWithPath: "/usr/bin/security")
-        deleteProcess.arguments = ["delete-generic-password", "-s", keychainService]
-        deleteProcess.standardOutput = Pipe()
-        deleteProcess.standardError = Pipe()
-        try? deleteProcess.run()
-        deleteProcess.waitUntilExit()
-
-        // Add new item
         let addProcess = Process()
         addProcess.executableURL = URL(fileURLWithPath: "/usr/bin/security")
-        addProcess.arguments = ["add-generic-password", "-s", keychainService, "-w", jsonString]
+        addProcess.arguments = Self.keychainSaveArguments(
+            service: keychainService,
+            account: NSUserName(),
+            password: jsonString
+        )
         addProcess.standardOutput = Pipe()
         addProcess.standardError = Pipe()
 

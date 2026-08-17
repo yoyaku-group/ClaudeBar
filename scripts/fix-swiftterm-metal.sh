@@ -3,24 +3,31 @@
 # causing "Unexpected duplicate tasks" build errors.
 # This removes the duplicate "Shaders.metal in Sources" entry, keeping only Resources.
 
-# Find all SwiftTerm pbxproj files (Tuist can place them in different locations)
-PBXPROJS=$(find . -path "*/SwiftTerm/*.xcodeproj/project.pbxproj" 2>/dev/null)
+# Search known locations. Tuist may place the generated project under
+# Tuist/.build/tuist-derived (classic) or .build/tuist-derived (cache build),
+# and the cached binaries path varies across Tuist versions. Also discover any
+# SwiftTerm project nested under the current tree.
+CANDIDATES=$({
+  find . -path "*/SwiftTerm/*.xcodeproj/project.pbxproj" 2>/dev/null
+  find ~/.tuist ~/Library/Caches/tuist 2>/dev/null \
+    -type f -name 'project.pbxproj' -path '*/SwiftTerm.xcodeproj/*' 2>/dev/null
+} | awk 'NF && !seen[$0]++')
 
-if [ -z "$PBXPROJS" ]; then
-  echo "SwiftTerm project not found, skipping"
+if [ -z "$CANDIDATES" ]; then
+  echo "SwiftTerm project not found in any known location, skipping"
   exit 0
 fi
 
-FIXED=0
+fixed=0
 while IFS= read -r PBXPROJ; do
   if grep -q "Shaders.metal in Sources" "$PBXPROJ"; then
     sed -i.bak '/Shaders\.metal in Sources/d' "$PBXPROJ"
     rm -f "${PBXPROJ}.bak"
     echo "Fixed: removed duplicate Shaders.metal from Sources in $PBXPROJ"
-    FIXED=$((FIXED + 1))
+    fixed=$((fixed + 1))
   fi
-done <<< "$PBXPROJS"
+done <<< "$CANDIDATES"
 
-if [ $FIXED -eq 0 ]; then
-  echo "No duplicate Metal entry found, skipping"
+if [ "$fixed" -eq 0 ]; then
+  echo "No duplicate Metal entry found in any SwiftTerm project, skipping"
 fi

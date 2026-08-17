@@ -80,12 +80,22 @@ struct MenuContentView: View {
                             .padding(.bottom, 8)
                     }
 
-                    // Main Content Area - no scroll, dynamic height
-                    VStack(spacing: 12) {
-                        metricsContent
+                    // Main Content Area — hugs its content, but caps at the
+                    // screen height and scrolls beyond it (aggregating
+                    // providers can show a dozen cards; the action bar must
+                    // never be pushed off-screen).
+                    ScrollView(.vertical, showsIndicators: true) {
+                        VStack(spacing: 12) {
+                            metricsContent
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 16)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 16)
+                    .frame(maxHeight: contentMaxHeight)
+                    // Recreate the scroll view when the shown content
+                    // changes, so a newly selected provider starts at the
+                    // top instead of inheriting the previous scroll offset.
+                    .id(settings.overviewModeEnabled ? "overview" : monitor.selectedProviderId)
 
                     // Bottom Action Bar
                     actionBar
@@ -103,6 +113,16 @@ struct MenuContentView: View {
                     }
                 }
             }
+
+            // Share Pass Error Overlay
+            if let claudeProvider = selectedProvider as? ClaudeProvider,
+               let passError = claudeProvider.passError {
+                SharePassErrorOverlay(message: passError.localizedDescription) {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        claudeProvider.clearPassError()
+                    }
+                }
+            }
         }
         .frame(width: 400)
         .fixedSize(horizontal: false, vertical: true)
@@ -117,11 +137,6 @@ struct MenuContentView: View {
                 hasRequestedNotificationPermission = true
                 let granted = await quotaAlerter.requestPermission()
                 AppLog.notifications.info("Alert permission request result: \(granted ? "granted" : "denied")")
-
-                // Start background sync on first app launch (only once)
-                if settings.backgroundSyncEnabled && !monitor.isMonitoring {
-                    startBackgroundSync()
-                }
             }
 
             // Show header and tabs immediately
@@ -143,48 +158,23 @@ struct MenuContentView: View {
             #endif
         }
         .onChange(of: selectedProviderId) { _, newProviderId in
-            // Refresh when user switches provider
+            // Refresh immediately when the user switches provider while the
+            // dropdown is open. Periodic background refresh is owned by the
+            // app-lifetime loop in ClaudeBarApp, which restarts itself when the
+            // selected or menu-bar provider changes.
             Task {
                 await refresh(providerId: newProviderId)
             }
         }
-        .onChange(of: settings.backgroundSyncEnabled) { _, enabled in
-            // React to background sync toggle
-            if enabled {
-                startBackgroundSync()
-            } else {
-                stopBackgroundSync()
-            }
-        }
-        .onChange(of: settings.backgroundSyncInterval) { _, _ in
-            // Restart sync with new interval
-            if settings.backgroundSyncEnabled {
-                restartBackgroundSync()
-            }
-        }
     }
 
-    // MARK: - Background Sync Control
-
-    private func startBackgroundSync() {
-        let interval = Duration.seconds(settings.backgroundSyncInterval)
-        AppLog.monitor.info("Starting background sync (interval: \(settings.backgroundSyncInterval)s)")
-        Task {
-            let stream = monitor.startMonitoring(interval: interval)
-            for await _ in stream {
-                // Events handled internally by QuotaMonitor
-            }
-        }
-    }
-
-    private func stopBackgroundSync() {
-        AppLog.monitor.info("Stopping background sync")
-        monitor.stopMonitoring()
-    }
-
-    private func restartBackgroundSync() {
-        stopBackgroundSync()
-        startBackgroundSync()
+    /// Upper bound for the scrollable content region — see
+    /// `PopoverContentHeight` for the policy and its tests.
+    private var contentMaxHeight: CGFloat {
+        PopoverContentHeight.maxHeight(
+            visibleScreenHeight: NSScreen.main?.visibleFrame.height ?? 800,
+            overviewMode: settings.overviewModeEnabled
+        )
     }
 
     // MARK: - Background Orbs
@@ -407,25 +397,19 @@ struct MenuContentView: View {
         }
     }
 
-    /// Max height for the overview scroll area (80% of screen or 500pt)
-    private var overviewMaxHeight: CGFloat {
-        let screenHeight = NSScreen.main?.visibleFrame.height ?? 800
-        return min(screenHeight * 0.8, 500)
-    }
-
     private func overviewContent(providers: [any AIProvider]) -> some View {
-        ScrollView(.vertical, showsIndicators: true) {
-            VStack(spacing: 12) {
-                ForEach(Array(providers.enumerated()), id: \.element.id) { index, provider in
-                    if index > 0 {
-                        Divider()
-                            .background(theme.glassBorder)
-                    }
-                    providerSection(provider: provider)
+        // Scrolling is owned by the shared middle-region ScrollView in
+        // `body`; nesting another vertical ScrollView here would break
+        // height negotiation and swallow gestures.
+        VStack(spacing: 12) {
+            ForEach(Array(providers.enumerated()), id: \.element.id) { index, provider in
+                if index > 0 {
+                    Divider()
+                        .background(theme.glassBorder)
                 }
+                providerSection(provider: provider)
             }
         }
-        .frame(maxHeight: overviewMaxHeight)
         .opacity(animateIn ? 1 : 0)
         .animation(.easeOut(duration: 0.5).delay(0.2), value: animateIn)
     }
@@ -529,21 +513,108 @@ struct MenuContentView: View {
         .glassCard(cornerRadius: 12, padding: 10)
     }
 
+    /// Collapsed state of quota-group sections, keyed by `QuotaGroup.id`.
+    /// Ephemeral by design: reopening the popover starts fully expanded.
+    @State private var collapsedQuotaGroups: Set<String> = []
+
+    /// Sections for aggregating providers (e.g. Oh My Pi): one collapsible
+    /// block per upstream account, so ten flat cards become scannable.
+    @ViewBuilder
+    private func quotaGroupSections(snapshot: UsageSnapshot) -> some View {
+        let groups = snapshot.quotaGroups
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(Array(groups.enumerated()), id: \.element.id) { groupIndex, group in
+                let baseDelay = Double(groups.prefix(groupIndex).reduce(0) { $0 + $1.quotas.count }) * 0.08
+                quotaGroupSection(group, baseDelay: baseDelay)
+            }
+        }
+    }
+
+    private func quotaGroupSection(_ group: QuotaGroup, baseDelay: Double) -> some View {
+        // Note-only sections (accounts without usable quota data) have no
+        // cards to collapse; the note renders inline in the header.
+        let isNoteOnly = group.quotas.isEmpty
+        let isCollapsed = !isNoteOnly && collapsedQuotaGroups.contains(group.id)
+        return VStack(alignment: .leading, spacing: 8) {
+            Button {
+                withAnimation(.easeOut(duration: 0.15)) {
+                    collapsedQuotaGroups = isCollapsed
+                        ? collapsedQuotaGroups.subtracting([group.id])
+                        : collapsedQuotaGroups.union([group.id])
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    if !isNoteOnly {
+                        Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(theme.textTertiary)
+                    }
+
+                    Text((group.title ?? "Other").uppercased())
+                        .font(theme.font(size: 9, weight: .semibold))
+                        .foregroundStyle(theme.textSecondary)
+                        .tracking(0.5)
+
+                    Spacer(minLength: 4)
+
+                    if case .headerInline(let note) = group.notePlacement {
+                        Text(note)
+                            .font(theme.font(size: 9, weight: .medium))
+                            .foregroundStyle(theme.textTertiary)
+                    } else if isNoteOnly {
+                        Text("No usage data")
+                            .font(theme.font(size: 9, weight: .medium))
+                            .foregroundStyle(theme.textTertiary)
+                    } else {
+                        // Collapsed sections keep their headline number visible.
+                        if isCollapsed, let lowest = group.lowestQuota {
+                            Text("\(Int(lowest.percentRemaining))% left")
+                                .font(theme.font(size: 9, weight: .semibold))
+                                .foregroundStyle(theme.textTertiary)
+                        }
+
+                        Text(group.worstStatus.badgeText)
+                            .badge(theme.statusColor(for: group.worstStatus))
+                    }
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(isNoteOnly)
+
+            if !isNoteOnly && !isCollapsed {
+                // A note attached to a quota-bearing section (the same
+                // account also reported "No usage" somewhere) is shown as
+                // its own row - never silently dropped.
+                if case .row(let note) = group.notePlacement {
+                    Text(note)
+                        .font(theme.font(size: 9, weight: .medium))
+                        .foregroundStyle(theme.textTertiary)
+                }
+
+                TwoColumnCardGrid(
+                    items: Array(group.quotas.enumerated()),
+                    id: \.element.quotaType
+                ) { entry in
+                    WrappedStatCard(quota: entry.element, delay: baseDelay + Double(entry.offset) * 0.08)
+                }
+            }
+        }
+    }
+
     @ViewBuilder
     private func statsGrid(snapshot: UsageSnapshot) -> some View {
         VStack(spacing: 10) {
-            // Show quota cards if quotas exist (Max/Pro accounts)
-            if !snapshot.quotas.isEmpty {
-                LazyVGrid(
-                    columns: [
-                        GridItem(.flexible(), spacing: 10),
-                        GridItem(.flexible(), spacing: 10)
-                    ],
-                    spacing: 10
-                ) {
-                    ForEach(Array(snapshot.quotas.enumerated()), id: \.element.quotaType) { index, quota in
-                        WrappedStatCard(quota: quota, delay: Double(index) * 0.08)
-                    }
+            // Grouped sections cover aggregating providers even when every
+            // account lacks quota data (note-only sections must still render).
+            if snapshot.hasQuotaGroups {
+                quotaGroupSections(snapshot: snapshot)
+            } else if !snapshot.quotas.isEmpty {
+                TwoColumnCardGrid(
+                    items: Array(snapshot.quotas.enumerated()),
+                    id: \.element.quotaType
+                ) { entry in
+                    WrappedStatCard(quota: entry.element, delay: Double(entry.offset) * 0.08)
                 }
             }
 
@@ -562,15 +633,11 @@ struct MenuContentView: View {
             // Controlled via Settings toggle or ~/.claudebar/settings.json
             if settings.showDailyUsageCards, let report = snapshot.dailyUsageReport {
                 let baseDelay = Double(snapshot.quotas.count + 1) * 0.08
-                LazyVGrid(
-                    columns: [
-                        GridItem(.flexible(), spacing: 10),
-                        GridItem(.flexible(), spacing: 10)
-                    ],
-                    spacing: 10
-                ) {
+                HStack(spacing: 10) {
                     DailyUsageCardView(metric: .cost, report: report, delay: baseDelay)
+                        .frame(maxWidth: .infinity)
                     DailyUsageCardView(metric: .tokens, report: report, delay: baseDelay + 0.08)
+                        .frame(maxWidth: .infinity)
                 }
                 if report.today.workingTime > 0 || report.previous.workingTime > 0 {
                     DailyUsageCardView(metric: .workingTime, report: report, delay: baseDelay + 0.16)
@@ -578,18 +645,14 @@ struct MenuContentView: View {
             }
 
             // Show extension metrics cards (from extension probes)
-            if let extensionMetrics = snapshot.extensionMetrics, !extensionMetrics.isEmpty {
+            if let extensionMetrics = snapshot.extensionMetrics?.filter({ $0.group == nil }),
+               !extensionMetrics.isEmpty {
                 let metricBaseDelay = Double(snapshot.quotas.count + 2) * 0.08
-                LazyVGrid(
-                    columns: [
-                        GridItem(.flexible(), spacing: 10),
-                        GridItem(.flexible(), spacing: 10)
-                    ],
-                    spacing: 10
-                ) {
-                    ForEach(Array(extensionMetrics.enumerated()), id: \.element.label) { index, metric in
-                        ExtensionMetricCardView(metric: metric, delay: metricBaseDelay + Double(index) * 0.08)
-                    }
+                TwoColumnCardGrid(
+                    items: Array(extensionMetrics.enumerated()),
+                    id: \.element.label
+                ) { entry in
+                    ExtensionMetricCardView(metric: entry.element, delay: metricBaseDelay + Double(entry.offset) * 0.08)
                 }
             }
 
@@ -753,9 +816,12 @@ struct MenuContentView: View {
     /// Refresh all enabled providers concurrently
     private func refreshAllEnabled() async {
         await withTaskGroup(of: Void.self) { group in
-            for provider in monitor.enabledProviders {
+            // The `isSyncing` guard reads main-actor provider state, so evaluate
+            // it here on the main actor (this closure inherits the caller's
+            // isolation). Each child task then awaits `refresh()`, whose heavy
+            // probe work still suspends off-main, keeping the refreshes concurrent.
+            for provider in monitor.enabledProviders where !provider.isSyncing {
                 group.addTask {
-                    guard !provider.isSyncing else { return }
                     do {
                         try await provider.refresh()
                     } catch {
@@ -797,7 +863,8 @@ struct MenuContentView: View {
                 showSharePass = true
             }
         } catch {
-            // Provider stores error in lastError
+            // Provider stores the error in passError, which the popover surfaces
+            // as SharePassErrorOverlay — a failed click is never silent.
         }
     }
 }
@@ -853,6 +920,75 @@ struct ProviderPill: View {
     }
 }
 
+// MARK: - Two-Column Card Grid
+
+/// Non-lazy two-column grid for popover cards.
+///
+/// The popover shows at most a few dozen lightweight cards, so laziness buys
+/// nothing — and `LazyVGrid` actively hurts: lazy containers report an
+/// estimated height and correct it as cells materialize, and inside the
+/// popover's vertical `ScrollView` each correction rewrites the scroll offset
+/// mid-gesture. Scrolling upward trembled, snapped back, and only got through
+/// with an exaggerated flick. An eager grid hands the scroll view exact
+/// content heights up front, so dragging stays smooth in both directions.
+///
+/// Layout matches the `LazyVGrid` it replaces: two equal flexible columns,
+/// `spacing` between rows and columns, cells center-aligned per row, and a
+/// lone card in the last row keeps column width instead of stretching.
+struct TwoColumnCardGrid<Item, ID: Hashable, Cell: View>: View {
+    let items: [Item]
+    let id: KeyPath<Item, ID>
+    var spacing: CGFloat = 10
+    @ViewBuilder let cell: (Item) -> Cell
+
+    init(
+        items: [Item],
+        id: KeyPath<Item, ID>,
+        spacing: CGFloat = 10,
+        @ViewBuilder cell: @escaping (Item) -> Cell
+    ) {
+        self.items = items
+        self.id = id
+        self.spacing = spacing
+        self.cell = cell
+    }
+
+    /// Rows are keyed by their leading item so a stable card list keeps
+    /// stable row identity across refreshes (no re-run of card appear
+    /// animations); when the list itself changes, affected rows rebuild.
+    private var rows: [(id: ID, leading: Item, trailing: Item?)] {
+        stride(from: 0, to: items.count, by: 2).map { start in
+            (
+                id: items[start][keyPath: id],
+                leading: items[start],
+                trailing: start + 1 < items.count ? items[start + 1] : nil
+            )
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: spacing) {
+            ForEach(rows, id: \.id) { row in
+                HStack(spacing: spacing) {
+                    cell(row.leading)
+                        .frame(maxWidth: .infinity)
+                    if let trailing = row.trailing {
+                        cell(trailing)
+                            .frame(maxWidth: .infinity)
+                    } else {
+                        // Hold the empty slot so a lone final card keeps
+                        // column width instead of stretching across the row.
+                        Color.clear
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 0)
+                            .accessibilityHidden(true)
+                    }
+                }
+            }
+        }
+    }
+}
+
 // MARK: - Wrapped Stat Card
 
 struct WrappedStatCard: View {
@@ -880,6 +1016,16 @@ struct WrappedStatCard: View {
         theme.statusColor(for: quota.status)
     }
 
+    private var isCappedSpend: Bool {
+        quota.dollarUsed != nil && quota.dollarCap != nil
+    }
+
+    private var valueCaption: String {
+        if isCappedSpend { return "Spent" }
+        if quota.isDollarBased { return "Remaining" }
+        return effectiveDisplayMode.displayLabel
+    }
+
     /// The color used for the pace label/number
     private var paceColor: Color {
         quota.pace.displayColor
@@ -895,7 +1041,7 @@ struct WrappedStatCard: View {
                         .font(theme.font(size: 9, weight: .bold))
                         .foregroundStyle(statusColor)
 
-                    Text(quota.quotaType.displayName.uppercased())
+                    Text((quota.compactTitle ?? quota.quotaType.displayName).uppercased())
                         .font(theme.font(size: 8, weight: .medium))
                         .foregroundStyle(theme.textSecondary)
                         .tracking(0.3)
@@ -915,7 +1061,22 @@ struct WrappedStatCard: View {
 
             // Large value display with label (end-aligned)
             HStack(alignment: .firstTextBaseline) {
-                if let dollarText = quota.formattedDollarRemaining {
+                if let dollarUsed = quota.formattedDollarUsed,
+                   let dollarCap = quota.formattedDollarCap {
+                    HStack(alignment: .firstTextBaseline, spacing: 2) {
+                        Text(dollarUsed)
+                            .font(theme.font(size: 20, weight: .heavy))
+                            .foregroundStyle(theme.textPrimary)
+                            .contentTransition(.numericText())
+
+                        Text("of \(dollarCap)")
+                            .font(theme.font(size: 9, weight: .semibold))
+                            .foregroundStyle(theme.textSecondary)
+                    }
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .layoutPriority(1)
+                } else if let dollarText = quota.formattedDollarRemaining {
                     Text(dollarText)
                         .font(theme.font(size: 18, weight: .bold))
                         .foregroundStyle(theme.textPrimary)
@@ -933,10 +1094,11 @@ struct WrappedStatCard: View {
                     }
                 }
 
-                Spacer()
+                Spacer(minLength: 4)
 
-                Text(quota.isDollarBased ? "Remaining" : effectiveDisplayMode.displayLabel)
-                    .font(theme.font(size: 12, weight: .medium))
+                Text(valueCaption)
+                    .font(theme.font(size: isCappedSpend ? 10 : 12, weight: .medium))
+                    .fixedSize()
                     .foregroundStyle(effectiveDisplayMode == .pace ? paceColor.opacity(0.8) : theme.textTertiary)
             }
 
@@ -987,6 +1149,7 @@ struct WrappedStatCard: View {
                     .frame(height: 5)
                 }
             }
+            .help(quota.paceTickHelp(mode: effectiveDisplayMode) ?? "")
 
             // Reset info
             if let resetText = quota.resetTimestampDescription ?? quota.resetText ?? quota.resetDescription {

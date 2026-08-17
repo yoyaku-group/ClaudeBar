@@ -1,6 +1,7 @@
 import SwiftUI
 import Domain
 import Infrastructure
+import MenuBarExtraAccess
 #if ENABLE_SPARKLE
 import Sparkle
 #endif
@@ -16,7 +17,16 @@ struct ClaudeBarApp: App {
     @State private var monitor: QuotaMonitor
 
     /// Monitors Claude Code sessions via hook events
-    @State private var sessionMonitor = SessionMonitor()
+    @State private var sessionMonitor: SessionMonitor
+
+    /// Drives the menu-bar pixels and the background-refresh lifecycle
+    /// imperatively, outside SwiftUI — the MenuBarExtra label hosting can
+    /// permanently stop re-evaluating after system sleep (issue #192).
+    private let statusItemDriver: StatusItemLabelDriver
+
+    /// Binding required by `.menuBarExtraAccess`; also enables programmatic
+    /// dropdown control if ever needed.
+    @State private var isMenuPresented = false
 
     /// The hook HTTP server that receives events from Claude Code
     private let hookServer = HookHTTPServer()
@@ -90,6 +100,14 @@ struct ClaudeBarApp: App {
                 probe: MiniMaxUsageProbe(settingsRepository: settingsRepository),
                 settingsRepository: settingsRepository
             ),
+            DeepSeekProvider(
+                probe: DeepSeekUsageProbe(settingsRepository: settingsRepository),
+                settingsRepository: settingsRepository
+            ),
+            VercelProvider(
+                probe: VercelUsageProbe(settingsRepository: settingsRepository),
+                settingsRepository: settingsRepository
+            ),
             AlibabaProvider(
                 probe: AlibabaUsageProbe(settingsRepository: settingsRepository, cookieProvider: AlibabaBrowserCookieProvider()),
                 settingsRepository: settingsRepository
@@ -98,16 +116,42 @@ struct ClaudeBarApp: App {
                 probe: MistralUsageProbe(),
                 settingsRepository: settingsRepository
             ),
+            OpenCodeProvider(
+                probe: OpenCodeUsageProbe(),
+                settingsRepository: settingsRepository
+            ),
+            OmpProvider(
+                probe: OmpUsageProbe(),
+                settingsRepository: settingsRepository
+            ),
+            GrokProvider(
+                probe: GrokUsageProbe(),
+                settingsRepository: settingsRepository
+            ),
         ])
         AppLog.providers.info("Created \(repository.all.count) providers")
 
         // Initialize the domain service with quota alerter
         // QuotaMonitor automatically validates selected provider on init
-        monitor = QuotaMonitor(
+        let monitor = QuotaMonitor(
             providers: repository,
             alerter: quotaAlerter
         )
+        self.monitor = monitor
         AppLog.monitor.info("QuotaMonitor initialized")
+
+        let sessionMonitor = SessionMonitor()
+        self.sessionMonitor = sessionMonitor
+
+        // The driver owns the menu-bar pixels and the refresh-loop lifecycle
+        // (outside SwiftUI — see StatusItemLabelDriver). Pixels start flowing
+        // once `.menuBarExtraAccess` hands over the NSStatusItem.
+        statusItemDriver = StatusItemLabelDriver(
+            monitor: monitor,
+            settings: AppSettings.shared,
+            sessionMonitor: sessionMonitor
+        )
+        statusItemDriver.startMonitoringLifecycle()
 
         // Load user extensions from ~/.claudebar/extensions/
         let extensionRegistry = ExtensionRegistry(
@@ -121,6 +165,14 @@ struct ClaudeBarApp: App {
 
         // Start hook server if hooks are enabled
         if settingsRepository.isHookEnabled() {
+            // Reconcile installed hooks so newly-added events (e.g.
+            // UserPromptSubmit, which revives a stopped session) register for
+            // existing users without re-toggling the setting. install() is
+            // idempotent — it replaces only ClaudeBar's own matcher entries
+            // per event and preserves hooks from other tools.
+            if HookInstaller.isInstalled() {
+                try? HookInstaller.install()
+            }
             startHookServer()
         }
 
@@ -132,15 +184,6 @@ struct ClaudeBarApp: App {
 
     /// App settings for theme
     @State private var settings = AppSettings.shared
-
-    /// Status of selected provider, considering burn rate setting
-    private var effectiveSelectedProviderStatus: QuotaStatus {
-        guard let snapshot = monitor.selectedProvider?.snapshot else { return .healthy }
-        if settings.burnRateWarningEnabled {
-            return snapshot.paceAwareOverallStatus(burnRateThreshold: settings.burnRateThreshold)
-        }
-        return snapshot.overallStatus
-    }
 
     /// Current theme mode from settings
     private var currentThemeMode: ThemeMode {
@@ -157,6 +200,10 @@ struct ClaudeBarApp: App {
                 let events = try await hookServer.start()
                 AppLog.hooks.info("Hook server started, listening for events")
                 for await event in events {
+                    // Ignore ClaudeBar's own background quota probe so routine
+                    // polling doesn't spam "Claude Code Finished: Probe"
+                    // notifications or pollute the recent-sessions list. (issue #172)
+                    guard !event.isClaudeBarProbe else { continue }
                     await sessionMonitor.processEvent(event)
                     await sendSessionNotification(for: event)
                 }
@@ -204,26 +251,45 @@ struct ClaudeBarApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            #if ENABLE_SPARKLE
-            MenuContentView(monitor: monitor, sessionMonitor: sessionMonitor, quotaAlerter: quotaAlerter) { enabled in
-                    if enabled { startHookServer() } else { stopHookServer() }
-                }
-                .appThemeProvider(themeModeId: settings.themeMode)
-                .environment(\.sparkleUpdater, sparkleUpdater)
-            #else
-            MenuContentView(monitor: monitor, sessionMonitor: sessionMonitor, quotaAlerter: quotaAlerter) { enabled in
-                    if enabled { startHookServer() } else { stopHookServer() }
-                }
-                .appThemeProvider(themeModeId: settings.themeMode)
-            #endif
+            Group {
+                #if ENABLE_SPARKLE
+                MenuContentView(monitor: monitor, sessionMonitor: sessionMonitor, quotaAlerter: quotaAlerter) { enabled in
+                        if enabled { startHookServer() } else { stopHookServer() }
+                    }
+                    .appThemeProvider(themeModeId: settings.themeMode)
+                    .environment(\.sparkleUpdater, sparkleUpdater)
+                #else
+                MenuContentView(monitor: monitor, sessionMonitor: sessionMonitor, quotaAlerter: quotaAlerter) { enabled in
+                        if enabled { startHookServer() } else { stopHookServer() }
+                    }
+                    .appThemeProvider(themeModeId: settings.themeMode)
+                #endif
+            }
+            // Opening/closing the dropdown flips `isMenuPresented`, which makes
+            // SwiftUI re-evaluate the scene and wipe the AppKit-drawn button
+            // image. The dropdown's lifecycle maps 1:1 to those flips, so
+            // re-assert the menu-bar pixels on both edges.
+            .onAppear { statusItemDriver.reassertPresentation() }
+            .onDisappear { statusItemDriver.reassertPresentation() }
         } label: {
-            // Show overall status + active session indicator in menu bar
-            StatusBarIcon(status: effectiveSelectedProviderStatus, activeSession: sessionMonitor.activeSession)
-                .appThemeProvider(themeModeId: settings.themeMode)
+            // Deliberately static: the menu-bar pixels are drawn by
+            // StatusItemLabelDriver into the status item's button image,
+            // because this SwiftUI label hosting can permanently stop
+            // re-evaluating after system sleep (issue #192). The placeholder
+            // only gives the scene a label to anchor the dropdown to.
+            Color.clear.frame(width: 1, height: 1)
+        }
+        // Must be the first scene modifier (extends MenuBarExtra, not Scene).
+        .menuBarExtraAccess(isPresented: $isMenuPresented) { statusItem in
+            statusItemDriver.attach(statusItem)
         }
         .menuBarExtraStyle(.window)
     }
 
+}
+
+private func sessionPhaseColor(_ phase: ClaudeSession.Phase) -> Color {
+    phase.color
 }
 
 /// The menu bar icon that reflects the overall quota status.
@@ -271,10 +337,6 @@ struct StatusBarIcon: View {
 
     private var iconColor: Color {
         theme.statusColor(for: status)
-    }
-
-    private func sessionPhaseColor(_ phase: ClaudeSession.Phase) -> Color {
-        phase.color
     }
 }
 
