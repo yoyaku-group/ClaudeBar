@@ -169,8 +169,14 @@ public final class ClaudeProvider: AIProvider, MultiAccountProvider {
         self.passProbe = passProbe
         self.settingsRepository = settingsRepository
         self.dailyUsageAnalyzer = dailyUsageAnalyzer
+        self.cliProbeFactory = { _ in probe }
+        self.apiProbeFactory = { _ in nil }
         // Load persisted enabled state (defaults to true)
         self.isEnabled = settingsRepository.isEnabled(forProvider: "claude")
+        self.accounts = [defaultAccount()]
+        self.activeAccount = self.accounts[0]
+        self.accountSnapshots = [:]
+        self.accountProbes = [:]
     }
 
     /// Creates a Claude provider with both CLI and API probes
