@@ -20,7 +20,6 @@ public final class JSONSettingsRepository:
     AlibabaSettingsRepository,
     VercelSettingsRepository,
     HookSettingsRepository,
-    MultiAccountSettingsRepository,
     @unchecked Sendable
 {
     /// Shared instance using the default settings file
