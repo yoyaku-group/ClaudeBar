@@ -26,13 +26,13 @@ jobs:
       - name: Install Tuist
         run: brew install tuist
 
-      - name: Install Dependencies
-        run: tuist install
-
       - name: Clean Tuist Cache
         run: |
           rm -rf Tuist/.build/tuist-derived
           tuist clean
+
+      - name: Install Dependencies
+        run: tuist install
 
       - name: Generate Project
         run: |
