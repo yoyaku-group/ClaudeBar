@@ -39,19 +39,24 @@ public struct InteractiveRunner: Sendable {
         /// Use this to prevent env vars like `CLAUDE_CODE_OAUTH_TOKEN` from being
         /// inherited by the subprocess, forcing it to use stored credentials instead.
         public var environmentExclusions: [String]
+        /// Environment variable keys and values to inject into the subprocess environment.
+        /// Use this to set per-invocation context such as `CLAUDE_CONFIG_DIR`.
+        public var environmentAdditions: [String: String]
 
         public init(
             timeout: TimeInterval = 20.0,
             workingDirectory: URL? = nil,
             arguments: [String] = [],
             autoResponses: [String: String] = [:],
-            environmentExclusions: [String] = []
+            environmentExclusions: [String] = [],
+            environmentAdditions: [String: String] = [:]
         ) {
             self.timeout = timeout
             self.workingDirectory = workingDirectory
             self.arguments = arguments
             self.autoResponses = autoResponses
             self.environmentExclusions = environmentExclusions
+            self.environmentAdditions = environmentAdditions
         }
     }
 
@@ -212,7 +217,10 @@ public struct InteractiveRunner: Sendable {
         process.standardInput = terminalHandle
         process.standardOutput = terminalHandle
         process.standardError = terminalHandle
-        process.environment = Self.terminalEnvironment(excluding: options.environmentExclusions)
+        process.environment = Self.terminalEnvironment(
+            excluding: options.environmentExclusions,
+            adding: options.environmentAdditions
+        )
         // Inherit the ambient probe QoS: the background monitoring loop binds
         // `.utility` so the spawned CLI tree runs on efficiency cores / throttled,
         // cutting idle heat (issue #204). Interactive runs stay `.default`.
@@ -393,9 +401,15 @@ public struct InteractiveRunner: Sendable {
 
     /// Environment variables for the terminal session.
     /// Ensures CLI tools behave as they would in a normal terminal.
-    /// - Parameter excluding: Environment variable keys to remove from the subprocess.
-    ///   Use this to prevent tokens like `CLAUDE_CODE_OAUTH_TOKEN` from being inherited.
-    private static func terminalEnvironment(excluding: [String] = []) -> [String: String] {
+    /// - Parameters:
+    ///   - excluding: Environment variable keys to remove from the subprocess.
+    ///     Use this to prevent tokens like `CLAUDE_CODE_OAUTH_TOKEN` from being inherited.
+    ///   - adding: Environment variable keys and values to inject into the subprocess.
+    ///     Applied after exclusions and defaults, so callers can override defaults.
+    private static func terminalEnvironment(
+        excluding: [String] = [],
+        adding: [String: String] = [:]
+    ) -> [String: String] {
         var env = ProcessInfo.processInfo.environment
         // Remove excluded keys before setting defaults
         for key in excluding {
@@ -407,6 +421,10 @@ public struct InteractiveRunner: Sendable {
         env["COLORTERM"] = env["COLORTERM"] ?? "truecolor"
         env["LANG"] = env["LANG"] ?? "en_US.UTF-8"
         env["CI"] = env["CI"] ?? "0"
+        // Apply caller overrides last so they take precedence
+        for (key, value) in adding {
+            env[key] = value
+        }
         return env
     }
 

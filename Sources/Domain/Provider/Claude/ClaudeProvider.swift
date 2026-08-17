@@ -6,7 +6,7 @@ import Observation
 /// Supports dual probe modes: CLI (default) and API.
 @MainActor
 @Observable
-public final class ClaudeProvider: AIProvider {
+public final class ClaudeProvider: AIProvider, MultiAccountProvider {
     // MARK: - Identity (Protocol Requirement)
 
     public let id: String = "claude"
@@ -49,6 +49,54 @@ public final class ClaudeProvider: AIProvider {
     /// Kept separate from `lastError` so a failed invitation-link fetch never
     /// makes the provider's usage data look unavailable.
     public private(set) var passError: Error?
+
+    // MARK: - Multi-Account State
+
+    /// All configured Claude accounts. Always contains at least the default account.
+    public private(set) var accounts: [ProviderAccount] = []
+
+    /// The currently active account (whose snapshot is exposed via `snapshot`).
+    public private(set) var activeAccount: ProviderAccount = ProviderAccount(
+        accountId: ProviderAccount.defaultAccountId,
+        providerId: "claude",
+        label: "Default"
+    )
+
+    /// Snapshots for all accounts (keyed by account ID).
+    public private(set) var accountSnapshots: [String: UsageSnapshot] = [:]
+
+    /// Probes for each configured account.
+    private var accountProbes: [String: AccountProbes] = [:]
+
+    /// Factories for creating per-account probes.
+    private let cliProbeFactory: (String?) -> any UsageProbe
+    private let apiProbeFactory: (String?) -> (any UsageProbe)?
+
+    /// Per-account probe pair.
+    private struct AccountProbes {
+        let cli: any UsageProbe
+        let api: (any UsageProbe)?
+
+        func active(for mode: ClaudeProbeMode) -> any UsageProbe {
+            switch mode {
+            case .cli:
+                return cli
+            case .api:
+                return api ?? cli
+            }
+        }
+
+        func fallback(for mode: ClaudeProbeMode, cliFallbackEnabled: Bool) async -> (any UsageProbe)? {
+            switch mode {
+            case .cli:
+                guard let api, await api.isAvailable() else { return nil }
+                return api
+            case .api:
+                guard cliFallbackEnabled else { return nil }
+                return await cli.isAvailable() ? cli : nil
+            }
+        }
+    }
 
     // MARK: - Probe Mode
 
@@ -97,15 +145,10 @@ public final class ClaudeProvider: AIProvider {
     /// Optional analyzer for daily usage from JSONL session data
     private let dailyUsageAnalyzer: (any DailyUsageAnalyzing)?
 
-    /// Returns the active probe based on current mode
-    private var activeProbe: any UsageProbe {
-        switch probeMode {
-        case .cli:
-            return cliProbe
-        case .api:
-            // Fall back to CLI if API probe not available
-            return apiProbe ?? cliProbe
-        }
+    /// Returns the probe pair for the active account.
+    private var activeProbes: AccountProbes {
+        accountProbes[activeAccount.accountId]
+            ?? AccountProbes(cli: cliProbe, api: apiProbe)
     }
 
     // MARK: - Initialization
@@ -136,40 +179,51 @@ public final class ClaudeProvider: AIProvider {
     ///   - apiProbe: The API probe for fetching usage via HTTP API
     ///   - passProbe: The probe to use for fetching guest pass data (optional)
     ///   - settingsRepository: The repository for persisting settings (must be ClaudeSettingsRepository for mode switching)
+    ///   - dailyUsageAnalyzer: Optional daily usage analyzer
+    ///   - cliProbeFactory: Optional factory for creating per-account CLI probes. Receives the account's
+    ///     `probeConfig["claudeConfigDir"]` if configured, otherwise `nil` for the default account.
+    ///   - apiProbeFactory: Optional factory for creating per-account API probes.
     public init(
         cliProbe: any UsageProbe,
         apiProbe: any UsageProbe,
         passProbe: (any ClaudePassProbing)? = nil,
         settingsRepository: any ClaudeSettingsRepository,
-        dailyUsageAnalyzer: (any DailyUsageAnalyzing)? = nil
+        dailyUsageAnalyzer: (any DailyUsageAnalyzing)? = nil,
+        cliProbeFactory: ((String?) -> any UsageProbe)? = nil,
+        apiProbeFactory: ((String?) -> (any UsageProbe)?)? = nil
     ) {
         self.cliProbe = cliProbe
         self.apiProbe = apiProbe
         self.passProbe = passProbe
         self.settingsRepository = settingsRepository
         self.dailyUsageAnalyzer = dailyUsageAnalyzer
+        self.cliProbeFactory = cliProbeFactory ?? { _ in cliProbe }
+        self.apiProbeFactory = apiProbeFactory ?? { _ in apiProbe }
         // Load persisted enabled state (defaults to true)
         self.isEnabled = settingsRepository.isEnabled(forProvider: "claude")
+        // Set up multi-account state if the repository supports it.
+        reloadAccounts()
     }
 
     // MARK: - AIProvider Protocol
 
     public func isAvailable() async -> Bool {
+        let probes = activeProbes
         switch probeMode {
         case .cli:
-            if await cliProbe.isAvailable() {
+            if await probes.cli.isAvailable() {
                 return true
             }
-            if let apiProbe, await apiProbe.isAvailable() {
+            if let api = probes.api, await api.isAvailable() {
                 return true
             }
             return false
         case .api:
-            if let apiProbe, await apiProbe.isAvailable() {
+            if let api = probes.api, await api.isAvailable() {
                 return true
             }
             guard cliFallbackEnabled else { return false }
-            return await cliProbe.isAvailable()
+            return await probes.cli.isAvailable()
         }
     }
 
@@ -192,35 +246,149 @@ public final class ClaudeProvider: AIProvider {
     /// (issue #204).
     @discardableResult
     public func refresh(_ kind: RefreshKind) async throws -> UsageSnapshot {
-        isSyncing = true
-        defer { isSyncing = false }
+        let snapshot = try await refreshAccount(activeAccount.accountId, kind: kind)
+        return snapshot
+    }
+
+    /// Refreshes a specific account's usage data and updates its snapshot.
+    /// If `accountId` matches the active account, the provider-level `snapshot`
+    /// is also updated.
+    @discardableResult
+    private func refreshAccount(_ accountId: String, kind: RefreshKind) async throws -> UsageSnapshot {
+        let probes = accountProbes[accountId] ?? activeProbes
+        let isActive = accountId == activeAccount.accountId
+
+        if isActive {
+            isSyncing = true
+        }
+        defer {
+            if isActive {
+                isSyncing = false
+            }
+        }
 
         do {
-            let newSnapshot = try await primaryProbe().probe()
-            snapshot = await report(for: newSnapshot, kind: kind)
-            lastError = nil
-            return snapshot!
+            let newSnapshot = try await probes.active(for: probeMode).probe()
+            let reported = await report(for: newSnapshot, kind: kind)
+            accountSnapshots[accountId] = reported
+            if isActive {
+                snapshot = reported
+                lastError = nil
+            }
+            return reported
         } catch let primaryError {
             if Self.shouldAttemptFallback(after: primaryError),
-               let fallback = await fallbackProbe() {
+               let fallback = await probes.fallback(for: probeMode, cliFallbackEnabled: cliFallbackEnabled) {
                 do {
                     let newSnapshot = try await fallback.probe()
-                    snapshot = await report(for: newSnapshot, kind: kind)
-                    lastError = nil
-                    return snapshot!
+                    let reported = await report(for: newSnapshot, kind: kind)
+                    accountSnapshots[accountId] = reported
+                    if isActive {
+                        snapshot = reported
+                        lastError = nil
+                    }
+                    return reported
                 } catch {
-                    // Both probes failed. Surface the primary error — it is
-                    // the actual root cause (e.g. HTTP 429). The fallback's
-                    // failure is incidental and would otherwise mask it,
-                    // sending users chasing the wrong problem.
-                    lastError = primaryError
+                    // Both probes failed. Surface the primary error.
+                    if isActive {
+                        lastError = primaryError
+                    }
                     throw primaryError
                 }
             }
 
-            lastError = primaryError
+            if isActive {
+                lastError = primaryError
+            }
             throw primaryError
         }
+    }
+
+    // MARK: - MultiAccountProvider Protocol
+
+    @discardableResult
+    public func switchAccount(to accountId: String) -> Bool {
+        guard accounts.contains(where: { $0.accountId == accountId }) else {
+            return false
+        }
+        activeAccount = accounts.first { $0.accountId == accountId } ?? activeAccount
+        if let multiSettings = settingsRepository as? MultiAccountSettingsRepository {
+            multiSettings.setActiveAccountId(accountId, forProvider: id)
+        }
+        // Surface the cached snapshot for the new active account if available.
+        snapshot = accountSnapshots[accountId]
+        return true
+    }
+
+    @discardableResult
+    public func refreshAccount(_ accountId: String) async throws -> UsageSnapshot {
+        try await refreshAccount(accountId, kind: .interactive)
+    }
+
+    public func refreshAllAccounts() async {
+        await withTaskGroup(of: (String, Result<UsageSnapshot, Error>).self) { group in
+            for account in accounts {
+                group.addTask {
+                    do {
+                        let snapshot = try await self.refreshAccount(account.accountId, kind: .interactive)
+                        return (account.accountId, .success(snapshot))
+                    } catch {
+                        return (account.accountId, .failure(error))
+                    }
+                }
+            }
+            await group.waitForAll()
+        }
+    }
+
+    /// Reloads account definitions from the settings repository and rebuilds
+    /// per-account probes. Call this after adding/removing accounts.
+    public func reloadAccounts() {
+        guard let multiSettings = settingsRepository as? MultiAccountSettingsRepository else {
+            // Repository doesn't support multi-account: keep the default single account.
+            accounts = [defaultAccount()]
+            activeAccount = accounts[0]
+            accountProbes[ProviderAccount.defaultAccountId] = AccountProbes(cli: cliProbe, api: apiProbe)
+            return
+        }
+
+        let configs = multiSettings.accounts(forProvider: id)
+        if configs.isEmpty {
+            accounts = [defaultAccount()]
+            activeAccount = accounts[0]
+            accountProbes = [ProviderAccount.defaultAccountId: AccountProbes(cli: cliProbe, api: apiProbe)]
+            return
+        }
+
+        accounts = configs.map { $0.toProviderAccount(providerId: id) }
+        accountProbes = [:]
+        for config in configs {
+            let configDir = config.probeConfig["claudeConfigDir"]
+            accountProbes[config.accountId] = AccountProbes(
+                cli: cliProbeFactory(configDir),
+                api: apiProbeFactory(configDir)
+            )
+        }
+
+        let persistedActiveId = multiSettings.activeAccountId(forProvider: id)
+        if let persistedActiveId,
+           accounts.contains(where: { $0.accountId == persistedActiveId }) {
+            activeAccount = accounts.first { $0.accountId == persistedActiveId } ?? accounts[0]
+        } else {
+            activeAccount = accounts[0]
+            multiSettings.setActiveAccountId(activeAccount.accountId, forProvider: id)
+        }
+
+        // Ensure the active account's snapshot is surfaced at the provider level.
+        snapshot = accountSnapshots[activeAccount.accountId]
+    }
+
+    private func defaultAccount() -> ProviderAccount {
+        ProviderAccount(
+            accountId: ProviderAccount.defaultAccountId,
+            providerId: id,
+            label: "Default"
+        )
     }
 
     /// Decides whether the fallback probe should run after the primary fails.
@@ -270,12 +438,7 @@ public final class ClaudeProvider: AIProvider {
     }
 
     private func primaryProbe() -> any UsageProbe {
-        switch probeMode {
-        case .cli:
-            return cliProbe
-        case .api:
-            return apiProbe ?? cliProbe
-        }
+        activeProbes.active(for: probeMode)
     }
 
     private var cliFallbackEnabled: Bool {
@@ -284,16 +447,7 @@ public final class ClaudeProvider: AIProvider {
     }
 
     private func fallbackProbe() async -> (any UsageProbe)? {
-        switch probeMode {
-        case .cli:
-            guard let apiProbe, await apiProbe.isAvailable() else {
-                return nil
-            }
-            return apiProbe
-        case .api:
-            guard cliFallbackEnabled else { return nil }
-            return await cliProbe.isAvailable() ? cliProbe : nil
-        }
+        await activeProbes.fallback(for: probeMode, cliFallbackEnabled: cliFallbackEnabled)
     }
 
     // MARK: - Guest Pass

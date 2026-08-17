@@ -57,6 +57,10 @@ struct ClaudeBarApp: App {
         // - HookSettingsRepository
         let settingsRepository = JSONSettingsRepository.shared
 
+        // Seed known Yoyaku Claude profiles so each isolated config directory
+        // (e.g. ~/.claude, ~/.claude-admin) appears as a separate account.
+        ClaudeBarApp.seedClaudeAccountsIfNeeded(settingsRepository: settingsRepository)
+
         // Create all providers with their probes (rich domain models)
         // Each provider manages its own isEnabled state (persisted via ProviderSettingsRepository)
         // Each probe checks isAvailable() for credentials/prerequisites
@@ -66,7 +70,19 @@ struct ClaudeBarApp: App {
                 apiProbe: ClaudeAPIUsageProbe(),
                 passProbe: ClaudePassProbe(),
                 settingsRepository: settingsRepository,
-                dailyUsageAnalyzer: ClaudeDailyUsageAnalyzer()
+                dailyUsageAnalyzer: ClaudeDailyUsageAnalyzer(),
+                cliProbeFactory: { configDir in
+                    if let configDir {
+                        return ClaudeUsageProbe(configDirectory: configDir)
+                    }
+                    return ClaudeUsageProbe()
+                },
+                apiProbeFactory: { configDir in
+                    if let configDir {
+                        return ClaudeAPIUsageProbe(configDirectory: configDir)
+                    }
+                    return ClaudeAPIUsageProbe()
+                }
             ),
             CodexProvider(
                 rpcProbe: CodexUsageProbe(),
@@ -246,6 +262,61 @@ struct ClaudeBarApp: App {
             }
         default:
             break
+        }
+    }
+
+    /// Detects isolated Claude config directories and registers them as
+    /// separate Claude accounts. Only runs when no Claude accounts are
+    /// currently configured, to avoid overwriting user edits.
+    static func seedClaudeAccountsIfNeeded(settingsRepository: any MultiAccountSettingsRepository) {
+        guard settingsRepository.accounts(forProvider: "claude").isEmpty else { return }
+
+        let home = NSHomeDirectory()
+        let fm = FileManager.default
+
+        var candidates: [(accountId: String, label: String, configDir: String, email: String?)] = []
+
+        // Default config at ~/.claude.json (CLAUDE_CONFIG_DIR unset).
+        let defaultJson = (home as NSString).appendingPathComponent(".claude.json")
+        if fm.fileExists(atPath: defaultJson) {
+            candidates.append((
+                accountId: "default",
+                label: "Default",
+                configDir: home,
+                email: nil
+            ))
+        }
+
+        // Isolated directories like ~/.claude-admin, ~/.claude-bedrock, etc.
+        if let homeContents = try? fm.contentsOfDirectory(atPath: home) {
+            for item in homeContents where item.hasPrefix(".claude-") {
+                let configDir = (home as NSString).appendingPathComponent(item)
+                let jsonPath = (configDir as NSString).appendingPathComponent(".claude.json")
+                guard fm.fileExists(atPath: jsonPath) else { continue }
+                let accountId = item.replacingOccurrences(of: ".claude-", with: "")
+                candidates.append((
+                    accountId: accountId,
+                    label: accountId.capitalized,
+                    configDir: configDir,
+                    email: nil
+                ))
+            }
+        }
+
+        // Deduplicate by accountId, keeping the first match.
+        var seen = Set<String>()
+        for candidate in candidates {
+            guard !seen.contains(candidate.accountId) else { continue }
+            seen.insert(candidate.accountId)
+            settingsRepository.addAccount(
+                ProviderAccountConfig(
+                    accountId: candidate.accountId,
+                    label: candidate.label,
+                    email: candidate.email,
+                    probeConfig: ["claudeConfigDir": candidate.configDir]
+                ),
+                forProvider: "claude"
+            )
         }
     }
 

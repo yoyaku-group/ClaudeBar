@@ -20,6 +20,7 @@ public final class JSONSettingsRepository:
     AlibabaSettingsRepository,
     VercelSettingsRepository,
     HookSettingsRepository,
+    MultiAccountSettingsRepository,
     @unchecked Sendable
 {
     /// Shared instance using the default settings file
@@ -593,5 +594,90 @@ extension JSONSettingsRepository: DeepSeekSettingsRepository {
 
     public func hasDeepSeekApiKey() -> Bool {
         getDeepSeekApiKey() != nil
+    }
+}
+
+// MARK: - MultiAccountSettingsRepository
+
+extension JSONSettingsRepository: MultiAccountSettingsRepository {
+    private func accountsKey(forProvider id: String) -> String {
+        "providers.\(id).accounts"
+    }
+
+    private func activeAccountKey(forProvider id: String) -> String {
+        "providers.\(id).activeAccountId"
+    }
+
+    public func accounts(forProvider id: String) -> [ProviderAccountConfig] {
+        guard let raw: [[String: Any]] = store.read(key: accountsKey(forProvider: id)) else {
+            return []
+        }
+        return raw.compactMap { dict in
+            guard let accountId = dict["accountId"] as? String,
+                  let label = dict["label"] as? String else {
+                return nil
+            }
+            var probeConfig: [String: String] = [:]
+            if let config = dict["probeConfig"] as? [String: String] {
+                probeConfig = config
+            } else if let config = dict["probeConfig"] as? [String: Any] {
+                probeConfig = config.compactMapValues { $0 as? String }
+            }
+            return ProviderAccountConfig(
+                accountId: accountId,
+                label: label,
+                email: dict["email"] as? String,
+                organization: dict["organization"] as? String,
+                probeConfig: probeConfig
+            )
+        }
+    }
+
+    public func addAccount(_ config: ProviderAccountConfig, forProvider id: String) {
+        var current = accounts(forProvider: id)
+        current.removeAll { $0.accountId == config.accountId }
+        current.append(config)
+        writeAccounts(current, forProvider: id)
+    }
+
+    public func removeAccount(accountId: String, forProvider id: String) {
+        var current = accounts(forProvider: id)
+        current.removeAll { $0.accountId == accountId }
+        writeAccounts(current, forProvider: id)
+    }
+
+    public func updateAccount(_ config: ProviderAccountConfig, forProvider id: String) {
+        var current = accounts(forProvider: id)
+        guard let index = current.firstIndex(where: { $0.accountId == config.accountId }) else {
+            return
+        }
+        current[index] = config
+        writeAccounts(current, forProvider: id)
+    }
+
+    public func activeAccountId(forProvider id: String) -> String? {
+        store.read(key: activeAccountKey(forProvider: id))
+    }
+
+    public func setActiveAccountId(_ accountId: String?, forProvider id: String) {
+        store.write(value: accountId, key: activeAccountKey(forProvider: id))
+    }
+
+    private func writeAccounts(_ accounts: [ProviderAccountConfig], forProvider id: String) {
+        let payload: [[String: Any]] = accounts.map { config in
+            var dict: [String: Any] = [
+                "accountId": config.accountId,
+                "label": config.label,
+                "probeConfig": config.probeConfig
+            ]
+            if let email = config.email {
+                dict["email"] = email
+            }
+            if let organization = config.organization {
+                dict["organization"] = organization
+            }
+            return dict
+        }
+        store.write(value: payload, key: accountsKey(forProvider: id))
     }
 }

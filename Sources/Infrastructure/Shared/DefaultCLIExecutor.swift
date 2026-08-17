@@ -7,9 +7,16 @@ public struct DefaultCLIExecutor: CLIExecutor {
     /// When set, these keys are removed before the subprocess launches,
     /// preventing tokens like `CLAUDE_CODE_OAUTH_TOKEN` from being inherited.
     private let environmentExclusions: [String]
+    /// Environment variable keys and values to inject into the subprocess environment.
+    /// Use this to set per-invocation context such as `CLAUDE_CONFIG_DIR`.
+    private let environmentAdditions: [String: String]
 
-    public init(environmentExclusions: [String] = []) {
+    public init(
+        environmentExclusions: [String] = [],
+        environmentAdditions: [String: String] = [:]
+    ) {
         self.environmentExclusions = environmentExclusions
+        self.environmentAdditions = environmentAdditions
     }
 
     public func locate(_ binary: String) -> String? {
@@ -30,7 +37,8 @@ public struct DefaultCLIExecutor: CLIExecutor {
             workingDirectory: workingDirectory,
             arguments: args,
             autoResponses: autoResponses,
-            environmentExclusions: environmentExclusions
+            environmentExclusions: environmentExclusions,
+            environmentAdditions: environmentAdditions
         )
 
         let result = try runner.run(binary: binary, input: input ?? "", options: options)

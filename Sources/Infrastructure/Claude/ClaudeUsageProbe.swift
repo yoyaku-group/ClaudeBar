@@ -23,30 +23,65 @@ public final class ClaudeUsageProbe: UsageProbe, @unchecked Sendable {
     /// Resolves account info from `~/.claude.json`
     private let accountInfoResolver: any AccountInfoResolving
 
+    /// Optional isolated Claude config directory. When set, the probe uses this
+    /// directory as `CLAUDE_CONFIG_DIR` and reads account info from its
+    /// `.claude.json` instead of the default `~/.claude.json`.
+    private let configDirectory: String?
+
     public init(
         claudeBinary: String = "claude",
         timeout: TimeInterval = 20.0,
         cliExecutor: CLIExecutor? = nil,
-        accountInfoResolver: any AccountInfoResolving = ClaudeAccountInfoResolver()
+        accountInfoResolver: any AccountInfoResolving = ClaudeAccountInfoResolver(),
+        configDirectory: String? = nil
     ) {
         self.claudeBinary = claudeBinary
         self.timeout = timeout
-        self.cliExecutor = cliExecutor ?? DefaultCLIExecutor(environmentExclusions: Self.envExclusions)
+        self.configDirectory = configDirectory
+        var environmentAdditions: [String: String] = [:]
+        if let configDirectory {
+            environmentAdditions["CLAUDE_CONFIG_DIR"] = (configDirectory as NSString).expandingTildeInPath
+        }
+        self.cliExecutor = cliExecutor ?? DefaultCLIExecutor(
+            environmentExclusions: Self.envExclusions,
+            environmentAdditions: environmentAdditions
+        )
         self.terminalRenderer = TerminalRenderer(cols: 160, rows: 50)
         self.accountInfoResolver = accountInfoResolver
+    }
+
+    /// Convenience initializer that binds the probe to an isolated Claude config
+    /// directory. It automatically sets `CLAUDE_CONFIG_DIR` for the subprocess and
+    /// resolves account info from that directory's `.claude.json`.
+    public convenience init(
+        claudeBinary: String = "claude",
+        timeout: TimeInterval = 20.0,
+        cliExecutor: CLIExecutor? = nil,
+        configDirectory: String
+    ) {
+        let expanded = (configDirectory as NSString).expandingTildeInPath
+        let configURL = URL(fileURLWithPath: expanded, isDirectory: true)
+            .appendingPathComponent(".claude.json")
+        self.init(
+            claudeBinary: claudeBinary,
+            timeout: timeout,
+            cliExecutor: cliExecutor,
+            accountInfoResolver: ClaudeAccountInfoResolver(configURL: configURL),
+            configDirectory: configDirectory
+        )
     }
 
     public func isAvailable() async -> Bool {
         if cliExecutor.locate(claudeBinary) != nil {
             return true
         }
-        
+
         // Log diagnostic info when binary not found
         let env = ProcessInfo.processInfo.environment
         AppLog.probes.error("Claude binary '\(claudeBinary)' not found in PATH")
         AppLog.probes.debug("Current directory: \(FileManager.default.currentDirectoryPath)")
         AppLog.probes.debug("PATH: \(env["PATH"] ?? "<not set>")")
-        if let configDir = env["CLAUDE_CONFIG_DIR"] {
+        if let configDir = configDirectory ?? env["CLAUDE_CONFIG_DIR"] {
             AppLog.probes.debug("CLAUDE_CONFIG_DIR: \(configDir)")
         }
         return false
@@ -900,8 +935,10 @@ public final class ClaudeUsageProbe: UsageProbe, @unchecked Sendable {
     /// won't show the workspace trust dialog on next invocation.
     /// Returns true if the write succeeded.
     internal func writeClaudeTrust(for directory: URL) -> Bool {
-        let configDir = ProcessInfo.processInfo.environment["CLAUDE_CONFIG_DIR"]
-            .map { URL(fileURLWithPath: ($0 as NSString).expandingTildeInPath, isDirectory: true) }
+        let configDir = configDirectory.map { ($0 as NSString).expandingTildeInPath }
+            .map { URL(fileURLWithPath: $0, isDirectory: true) }
+            ?? ProcessInfo.processInfo.environment["CLAUDE_CONFIG_DIR"]
+                .map { URL(fileURLWithPath: ($0 as NSString).expandingTildeInPath, isDirectory: true) }
         let claudeJsonURL = (configDir ?? FileManager.default.homeDirectoryForCurrentUser)
             .appendingPathComponent(".claude.json")
 

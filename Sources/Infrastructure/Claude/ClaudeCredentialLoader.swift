@@ -51,6 +51,7 @@ public struct ClaudeCredentialResult: @unchecked Sendable {
 /// 3. Environment: `CLAUDE_CODE_OAUTH_TOKEN` env var (inference-only from `claude setup-token`)
 public struct ClaudeCredentialLoader: Sendable {
     private let homeDirectory: String
+    private let configDirectory: String?
     private let keychainService: String
     private let useKeychain: Bool
     private let environment: [String: String]
@@ -74,19 +75,32 @@ public struct ClaudeCredentialLoader: Sendable {
 
     public init(
         homeDirectory: String = NSHomeDirectory(),
+        configDirectory: String? = nil,
         keychainService: String = "Claude Code-credentials",
         useKeychain: Bool = true,
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) {
         self.homeDirectory = homeDirectory
+        self.configDirectory = configDirectory
         self.keychainService = keychainService
         self.useKeychain = useKeychain
         self.environment = environment
     }
 
+    /// The directory that holds the Claude config for this loader.
+    /// Respects an explicit `configDirectory` first, then the `CLAUDE_CONFIG_DIR`
+    /// environment variable, then falls back to the home directory.
+    public var resolvedConfigDirectory: String {
+        if let configDirectory { return configDirectory }
+        if let envDir = environment["CLAUDE_CONFIG_DIR"], !envDir.isEmpty {
+            return (envDir as NSString).expandingTildeInPath
+        }
+        return homeDirectory
+    }
+
     /// The path to the credentials file.
     public var credentialsFilePath: String {
-        (homeDirectory as NSString).appendingPathComponent(".claude/.credentials.json")
+        (resolvedConfigDirectory as NSString).appendingPathComponent(".claude/.credentials.json")
     }
 
     /// Loads credentials from file, Keychain, or environment.

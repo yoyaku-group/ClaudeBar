@@ -167,6 +167,20 @@ public struct ClaudeAPIUsageProbe: UsageProbe, @unchecked Sendable {
         self.snapshotCache = SnapshotCache(ttl: snapshotCacheTTL)
     }
 
+    /// Creates a probe tied to a specific Claude config directory.
+    /// Useful when monitoring multiple isolated Claude profiles.
+    public init(
+        configDirectory: String,
+        networkClient: any NetworkClient = URLSession.shared,
+        timeout: TimeInterval = 15,
+        snapshotCacheTTL: TimeInterval = Self.defaultSnapshotCacheTTL
+    ) {
+        self.credentialLoader = ClaudeCredentialLoader(configDirectory: configDirectory)
+        self.networkClient = networkClient
+        self.timeout = timeout
+        self.snapshotCache = SnapshotCache(ttl: snapshotCacheTTL)
+    }
+
     public func isAvailable() async -> Bool {
         if cache.get() != nil { return true }
         return credentialLoader.loadCredentials() != nil
