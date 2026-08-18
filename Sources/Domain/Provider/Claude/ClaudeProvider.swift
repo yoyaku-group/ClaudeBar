@@ -347,6 +347,18 @@ public final class ClaudeProvider: AIProvider, MultiAccountProvider {
         }
     }
 
+    @discardableResult
+    public func addAccount(_ config: ProviderAccountConfig) -> Bool {
+        guard !config.accountId.isEmpty,
+              !config.label.isEmpty,
+              let multiSettings = settingsRepository as? MultiAccountSettingsRepository else {
+            return false
+        }
+        multiSettings.addAccount(config, forProvider: id)
+        reloadAccounts()
+        return true
+    }
+
     /// Reloads account definitions from the settings repository and rebuilds
     /// per-account probes. Call this after adding/removing accounts.
     public func reloadAccounts() {

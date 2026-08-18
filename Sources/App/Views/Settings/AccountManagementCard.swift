@@ -45,6 +45,9 @@ struct AccountManagementCard: View {
                         .stroke(theme.glassBorder, lineWidth: 1)
                 )
         )
+        .sheet(isPresented: $showAddSheet) {
+            AddAccountSheet(provider: provider)
+        }
     }
 
     // MARK: - Header

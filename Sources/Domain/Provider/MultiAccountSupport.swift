@@ -41,6 +41,12 @@ public protocol MultiAccountProvider: AIProvider {
     /// Refreshes all accounts concurrently.
     func refreshAllAccounts() async
 
+    /// Adds a new account configuration for this provider.
+    /// - Parameter config: The account configuration to add
+    /// - Returns: true if the account was added successfully
+    @discardableResult
+    func addAccount(_ config: ProviderAccountConfig) -> Bool
+
     /// The aggregate status across all accounts (worst status wins).
     var aggregateStatus: QuotaStatus { get }
 
@@ -51,6 +57,11 @@ public protocol MultiAccountProvider: AIProvider {
 // MARK: - Default Implementations
 
 public extension MultiAccountProvider {
+    /// Default: adding accounts is not supported unless explicitly implemented.
+    func addAccount(_ config: ProviderAccountConfig) -> Bool {
+        false
+    }
+
     /// Default: aggregate status is the worst across all account snapshots
     var aggregateStatus: QuotaStatus {
         accountSnapshots.values
