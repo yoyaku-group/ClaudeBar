@@ -27,6 +27,11 @@ public enum HookInstaller {
         "SubagentStop",
         "Stop",
         "UserPromptSubmit",
+        // Context-pressure timeline: compaction start/end (the installer
+        // reconciles idempotently, so adding events ships to existing
+        // installs on next app start).
+        "PreCompact",
+        "PostCompact",
     ]
 
     /// Installs hooks into the Claude settings file.

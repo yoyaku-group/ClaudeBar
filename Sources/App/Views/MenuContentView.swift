@@ -24,6 +24,9 @@ struct MenuContentView: View {
     @State private var showSharePass = false
     @State private var settings = AppSettings.shared
     @State private var hasRequestedNotificationPermission = false
+    /// Per-harness session/activity tracking (guardian tail + transcript
+    /// counts) — owned here so it lives exactly as long as the panel content.
+    @State private var harTracker = HarUsageTracker()
 
     /// The currently selected provider ID (from monitor, which is @Observable)
     private var selectedProviderId: String {
@@ -379,7 +382,16 @@ struct MenuContentView: View {
             if providers.isEmpty {
                 emptyState
             } else {
-                overviewContent(providers: providers)
+                VStack(spacing: 12) {
+                    overviewContent(providers: providers)
+                    SessionsCardView(tracker: harTracker, sessionMonitor: sessionMonitor)
+                    GuardianCardView(tracker: harTracker)
+                }
+                .task {
+                    // Light 60s tick + throttled transcript scan; lives with
+                    // the panel ("traquer ce que j'utilise").
+                    harTracker.start()
+                }
             }
         } else if let provider = selectedProvider, let snapshot = provider.snapshot {
             VStack(spacing: 12) {
