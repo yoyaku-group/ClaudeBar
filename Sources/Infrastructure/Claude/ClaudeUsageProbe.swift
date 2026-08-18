@@ -107,6 +107,13 @@ public final class ClaudeUsageProbe: UsageProbe, @unchecked Sendable {
                     "Press Enter to continue": "\r",
                     "ctrl+t to disable": "\r",  // Onboarding complete
                     "Yes, I trust this folder": "\r",  // New trust prompt format
+                    // Chrome-extension onboarding: "1. Yes, use my browser / 2. No…".
+                    // Send Esc (keeps browser tools off). Never Enter — it would select
+                    // "Yes" and persist a config change into the user's real ~/.claude.json.
+                    "Esc to keep browser tools off": "\u{1B}",
+                    // Settings-validation dialog: "1. Continue / 2. Fix with Claude / 3. Exit".
+                    // "Continue" is non-destructive.
+                    "1. Continue": "\r",
                 ]
             )
         } catch {
@@ -117,12 +124,16 @@ public final class ClaudeUsageProbe: UsageProbe, @unchecked Sendable {
         let cliElapsed = CFAbsoluteTimeGetCurrent() - cliStart
         AppLog.probes.debug("Claude CLI execution took \(String(format: "%.3f", cliElapsed))s")
 
-        AppLog.probes.info("Claude /usage output:\n\(usageResult.output)")
+        // Strip ANSI up front: logs stay readable and parsing stays robust even
+        // when the CLI paints a prompt over the usage table (cota-class leak).
+        let output = ANSIStripper.strip(usageResult.output)
+
+        AppLog.probes.info("Claude /usage output:\n\(output)")
 
         let parseStart = CFAbsoluteTimeGetCurrent()
         let snapshot: UsageSnapshot
         do {
-            snapshot = try parseClaudeOutput(usageResult.output)
+            snapshot = try parseClaudeOutput(output)
         } catch ProbeError.folderTrustRequired {
             // Auto-response failed to dismiss trust prompt — write trust to ~/.claude.json and retry
             AppLog.probes.info("Writing trust for probe directory and retrying...")
@@ -171,6 +182,8 @@ public final class ClaudeUsageProbe: UsageProbe, @unchecked Sendable {
                     "Press Enter to continue": "\r",
                     "ctrl+t to disable": "\r",
                     "Yes, I trust this folder": "\r",  // New trust prompt format
+                    "Esc to keep browser tools off": "\u{1B}",  // Chrome onboarding — see probe()
+                    "1. Continue": "\r",  // Settings-validation dialog — see probe()
                 ]
             )
         } catch {
@@ -178,9 +191,9 @@ public final class ClaudeUsageProbe: UsageProbe, @unchecked Sendable {
             throw ProbeError.executionFailed(error.localizedDescription)
         }
 
-        AppLog.probes.info("Claude /cost output:\n\(costResult.output)")
+        AppLog.probes.info("Claude /cost output:\n\(ANSIStripper.strip(costResult.output))")
 
-        let snapshot = try parseCostOutput(costResult.output)
+        let snapshot = try parseCostOutput(ANSIStripper.strip(costResult.output))
 
         AppLog.probes.info("Claude /cost probe success: cost=\(snapshot.costUsage?.formattedCost ?? "N/A")")
 
@@ -217,6 +230,7 @@ public final class ClaudeUsageProbe: UsageProbe, @unchecked Sendable {
         guard let cost = extractCostValue(clean) else {
             AppLog.probes.error("Claude /cost parse failed: could not find 'Total cost' in output")
             AppLog.probes.debug("Raw output: \(clean)")
+            RawCaptureWriter.capture(kind: "failed-parse-cost", payload: clean)
             throw ProbeError.parseFailed("Could not find total cost")
         }
 
@@ -338,6 +352,19 @@ public final class ClaudeUsageProbe: UsageProbe, @unchecked Sendable {
             AppLog.probes.error("Claude parse failed: could not find 'Current session' percentage in output")
             AppLog.probes.debug("Raw output (original, \(text.count) chars): \(text.debugDescription)")
             AppLog.probes.debug("Raw output (cleaned, \(clean.count) chars): \(clean)")
+            // Keep the exact failing payload on disk so the next CLI output-shape
+            // change can be diagnosed from the Diagnostics folder, not from memory.
+            RawCaptureWriter.capture(kind: "failed-parse", payload: """
+            # Claude /usage parse failure
+            # captured: \(ISO8601DateFormatter().string(from: Date()))
+            # label sought: 'Current session' percentage
+
+            ----- normalized (\(clean.count) chars) -----
+            \(clean)
+
+            ----- original (\(text.count) chars) -----
+            \(text)
+            """)
             throw ProbeError.parseFailed("Could not find session usage")
         }
 
@@ -584,6 +611,27 @@ public final class ClaudeUsageProbe: UsageProbe, @unchecked Sendable {
         return isUsed ? max(0, 100 - rawVal) : rawVal
     }
 
+    /// A reset line is only accepted when "Resets" is followed by a shape the
+    /// downstream date parser actually understands: a clock time ("4:59pm",
+    /// "3pm"), a month-day (optionally with year), or a relative duration
+    /// ("in 2h 15m", "30m", "2d"). Anything else (onboarding prompts, dialog
+    /// text, redraw fragments) must NOT become resetText — leaking it rendered
+    /// garbage into the menu bar (the "cota" bug class).
+    private static let resetLineRegex: NSRegularExpression = {
+        let pattern = #"(?i)resets?\s+(?:in\s+)?(\d{1,2}(?::\d{2})?\s*[ap]m|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}(?:\s*,?\s*\d{4})?|(?:\d+\s*[dhm]\s*)+)"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+            fatalError("ClaudeUsageProbe: invalid resetLineRegex")
+        }
+        return regex
+    }()
+
+    /// True when the line contains "Resets <valid time shape>" anywhere
+    /// (Extra-usage lines carry the reset mid-line after the spend amount).
+    private static func isValidResetLine(_ line: String) -> Bool {
+        let range = NSRange(line.startIndex..<line.endIndex, in: line)
+        return resetLineRegex.firstMatch(in: line, options: [], range: range) != nil
+    }
+
     internal func extractReset(labelSubstring: String, text: String) -> String? {
         let lines = text.components(separatedBy: .newlines)
         let label = labelSubstring.lowercased()
@@ -591,13 +639,12 @@ public final class ClaudeUsageProbe: UsageProbe, @unchecked Sendable {
         for (idx, line) in lines.enumerated() where line.lowercased().contains(label) {
             let window = lines.dropFirst(idx).prefix(14)
             for candidate in window {
-                let lower = candidate.lowercased()
-                // Look for "resets" or time indicators like "2h" or "30m"
-                if lower.contains("reset") ||
-                   (lower.contains("in") && (lower.contains("h") || lower.contains("m"))) {
-                    let trimmed = candidate.trimmingCharacters(in: .whitespacesAndNewlines)
-                    return deduplicateResetText(trimmed)
-                }
+                let trimmed = candidate.trimmingCharacters(in: .whitespacesAndNewlines)
+                // Strict whitelist: "resets" followed by a recognized time shape.
+                // The old heuristic (contains "in" && "h"/"m") matched prompt text
+                // like "Claude in Chrome extension detected" and leaked it to the UI.
+                guard Self.isValidResetLine(trimmed) else { continue }
+                return deduplicateResetText(trimmed)
             }
         }
         return nil
@@ -680,6 +727,13 @@ public final class ClaudeUsageProbe: UsageProbe, @unchecked Sendable {
         guard let text else { return nil }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
+
+        // Post-parse defense: a reset line is short, single-line, and contains
+        // a digit near the front. Anything else is parse garbage (prompt text,
+        // redraw fragments) — return nil rather than render it.
+        if trimmed.count > 60 { return nil }
+        if trimmed.contains("\n") || trimmed.contains("\r") { return nil }
+        if !trimmed.prefix(40).contains(where: { $0.isNumber }) { return nil }
 
         // If it doesn't start with "Resets", add it
         if trimmed.lowercased().hasPrefix("reset") {
