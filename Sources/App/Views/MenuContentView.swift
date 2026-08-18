@@ -401,17 +401,14 @@ struct MenuContentView: View {
         // Scrolling is owned by the shared middle-region ScrollView in
         // `body`; nesting another vertical ScrollView here would break
         // height negotiation and swallow gestures.
-        VStack(spacing: 12) {
-            ForEach(Array(providers.enumerated()), id: \.element.id) { index, provider in
-                if index > 0 {
-                    Divider()
-                        .background(theme.glassBorder)
-                }
-                providerSection(provider: provider)
-            }
-        }
-        .opacity(animateIn ? 1 : 0)
-        .animation(.easeOut(duration: 0.5).delay(0.2), value: animateIn)
+        //
+        // Comprehension-first dashboard (2026-08-18): rows sorted by worst
+        // remaining % (or soonest reset), one-click Session 5h / Semaine / Tout
+        // window selector, relative reset times only. providerSection remains
+        // for the single-provider view.
+        OverviewDashboardView(providers: providers, settings: settings)
+            .opacity(animateIn ? 1 : 0)
+            .animation(.easeOut(duration: 0.5).delay(0.2), value: animateIn)
     }
 
     private func providerSection(provider: any AIProvider) -> some View {

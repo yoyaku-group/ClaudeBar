@@ -63,8 +63,8 @@ struct ClaudeUsageProbePromptLeakTests {
 
     // MARK: - ANSIStripper
 
-    @Test
-    func `ANSIStripper removes cursor-positioning sequences`() {
+    @Test("ANSIStripper removes cursor-positioning sequences")
+    func ANSIStripperRemovesCursorPositioningSequences() {
         let stripped = ANSIStripper.strip(Self.chromeOnboardingOutput)
         #expect(!stripped.contains("\u{1B}"))
         #expect(stripped.contains("Claude"))
@@ -73,16 +73,16 @@ struct ClaudeUsageProbePromptLeakTests {
         #expect(stripped.contains("\n"))
     }
 
-    @Test
-    func `ANSIStripper preserves plain usage tables`() {
+    @Test("ANSIStripper preserves plain usage tables")
+    func ANSIStripperPreservesPlainUsageTables() {
         let stripped = ANSIStripper.strip(Self.healthyUsageOutput)
         #expect(stripped == Self.healthyUsageOutput)
     }
 
     // MARK: - extractReset strict whitelist
 
-    @Test
-    func `extractReset rejects Chrome onboarding prompt line`() {
+    @Test("extractReset rejects Chrome onboarding prompt line")
+    func extractResetRejectsChromeOnboardingPromptLine() {
         let probe = makeProbe()
         let text = """
         Current session
@@ -95,8 +95,8 @@ struct ClaudeUsageProbePromptLeakTests {
         #expect(result == "Resets in 2h 15m")
     }
 
-    @Test
-    func `extractReset returns nil when only prompt text follows the label`() {
+    @Test("extractReset returns nil when only prompt text follows the label")
+    func extractResetReturnsNilWhenOnlyPromptTextFollowsTheLabel() {
         let probe = makeProbe()
         let text = """
         Current session
@@ -108,15 +108,15 @@ struct ClaudeUsageProbePromptLeakTests {
         #expect(result == nil)
     }
 
-    @Test
-    func `extractReset returns nil for settings-validation dialog`() {
+    @Test("extractReset returns nil for settings-validation dialog")
+    func extractResetReturnsNilForSettingsValidationDialog() {
         let probe = makeProbe()
         let result = probe.extractReset(labelSubstring: "Current session", text: Self.settingsValidationOutput)
         #expect(result == nil)
     }
 
-    @Test
-    func `extractReset accepts documented clock formats`() {
+    @Test("extractReset accepts documented clock formats")
+    func extractResetAcceptsDocumentedClockFormats() {
         let probe = makeProbe()
         for resetLine in [
             "Resets in 2h 15m",
@@ -136,8 +136,8 @@ struct ClaudeUsageProbePromptLeakTests {
 
     // MARK: - cleanResetText post-parse defense
 
-    @Test
-    func `cleanResetText rejects implausible strings`() {
+    @Test("cleanResetText rejects implausible strings")
+    func cleanResetTextRejectsImplausibleStrings() {
         let probe = makeProbe()
         // Too long (prompt sentence, not a reset)
         #expect(probe.cleanResetText("Claude in Chrome extension detected — Enter to confirm") == nil)
@@ -147,8 +147,8 @@ struct ClaudeUsageProbePromptLeakTests {
         #expect(probe.cleanResetText("extension detected") == nil)
     }
 
-    @Test
-    func `cleanResetText still prefixes valid short durations`() {
+    @Test("cleanResetText still prefixes valid short durations")
+    func cleanResetTextStillPrefixesValidShortDurations() {
         let probe = makeProbe()
         #expect(probe.cleanResetText("in 2h") == "Resets in 2h")
         #expect(probe.cleanResetText("Resets 4:59pm (America/New_York)") == "Resets 4:59pm (America/New_York)")
@@ -156,22 +156,22 @@ struct ClaudeUsageProbePromptLeakTests {
 
     // MARK: - end-to-end parse over mangled payloads
 
-    @Test
-    func `parse throws on pure onboarding prompt instead of returning garbage`() {
+    @Test("parse throws on pure onboarding prompt instead of returning garbage")
+    func parseThrowsOnPureOnboardingPromptInsteadOfReturningGarbage() {
         #expect(throws: ProbeError.self) {
             _ = try ClaudeUsageProbe.parse(Self.chromeOnboardingOutput)
         }
     }
 
-    @Test
-    func `parse throws on settings dialog instead of returning garbage`() {
+    @Test("parse throws on settings dialog instead of returning garbage")
+    func parseThrowsOnSettingsDialogInsteadOfReturningGarbage() {
         #expect(throws: ProbeError.self) {
             _ = try ClaudeUsageProbe.parse(Self.settingsValidationOutput)
         }
     }
 
-    @Test
-    func `parse succeeds on healthy table and yields whitelisted resetText`() throws {
+    @Test("parse succeeds on healthy table and yields whitelisted resetText")
+    func parseSucceedsOnHealthyTableAndYieldsWhitelistedResettext() {
         let snapshot = try ClaudeUsageProbe.parse(Self.healthyUsageOutput)
         #expect(snapshot.quotas.count == 2)
         let session = snapshot.quotas.first { $0.quotaType == .session }

@@ -139,11 +139,37 @@ public final class JSONSettingsRepository:
     }
 
     public func overviewModeEnabled() -> Bool {
-        store.read(key: "app.overviewModeEnabled") ?? false
+        // Default ON since 2026-08-18: the comprehension-first dashboard is
+        // the primary view (existing users with an explicit value keep it).
+        store.read(key: "app.overviewModeEnabled") ?? true
     }
 
     public func setOverviewModeEnabled(_ enabled: Bool) {
         store.write(value: enabled, key: "app.overviewModeEnabled")
+    }
+
+    public func overviewWindowFilter() -> OverviewWindowFilter {
+        guard let raw = store.read(key: "app.overviewWindowFilter") as? String,
+              let filter = OverviewWindowFilter(rawValue: raw) else {
+            return .all
+        }
+        return filter
+    }
+
+    public func setOverviewWindowFilter(_ filter: OverviewWindowFilter) {
+        store.write(value: filter.rawValue, key: "app.overviewWindowFilter")
+    }
+
+    public func overviewSort() -> OverviewSort {
+        guard let raw = store.read(key: "app.overviewSort") as? String,
+              let sort = OverviewSort(rawValue: raw) else {
+            return .percentRemaining
+        }
+        return sort
+    }
+
+    public func setOverviewSort(_ sort: OverviewSort) {
+        store.write(value: sort.rawValue, key: "app.overviewSort")
     }
 
     public func backgroundSyncEnabled() -> Bool {

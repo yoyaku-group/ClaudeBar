@@ -116,6 +116,20 @@ public final class AppSettings {
         }
     }
 
+    /// Which window's percentage drives the overview dashboard (R11 selector).
+    public var overviewWindowFilter: OverviewWindowFilter {
+        didSet {
+            repository.setOverviewWindowFilter(overviewWindowFilter)
+        }
+    }
+
+    /// Overview dashboard row ordering.
+    public var overviewSort: OverviewSort {
+        didSet {
+            repository.setOverviewSort(overviewSort)
+        }
+    }
+
     // MARK: - Background Sync Settings
 
     /// Whether background sync is enabled (default: false)
@@ -233,6 +247,8 @@ public final class AppSettings {
         self.burnRateThreshold = repository.burnRateThreshold()
         self.showDailyUsageCards = repository.showDailyUsageCards()
         self.overviewModeEnabled = repository.overviewModeEnabled()
+        self.overviewWindowFilter = repository.overviewWindowFilter()
+        self.overviewSort = repository.overviewSort()
         self.backgroundSyncEnabled = repository.backgroundSyncEnabled()
         self.backgroundSyncInterval = repository.backgroundSyncInterval()
         self.menuBarPercentageEnabled = repository.menuBarPercentageEnabled()

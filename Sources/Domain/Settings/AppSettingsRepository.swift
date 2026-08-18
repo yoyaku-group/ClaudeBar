@@ -50,6 +50,14 @@ public protocol AppSettingsRepository: Sendable {
     func overviewModeEnabled() -> Bool
     func setOverviewModeEnabled(_ enabled: Bool)
 
+    /// Which window's percentage drives the overview dashboard (R11 selector).
+    func overviewWindowFilter() -> OverviewWindowFilter
+    func setOverviewWindowFilter(_ filter: OverviewWindowFilter)
+
+    /// Overview dashboard row ordering.
+    func overviewSort() -> OverviewSort
+    func setOverviewSort(_ sort: OverviewSort)
+
     // MARK: - Background Sync
 
     func backgroundSyncEnabled() -> Bool
