@@ -88,7 +88,7 @@ struct AddAccountSheet: View {
                         .padding(.vertical, 8)
                         .background(
                             RoundedRectangle(cornerRadius: 8)
-                                .fill(isValid ? theme.accentGradient : theme.glassBackground)
+                                .fill(isValid ? theme.accentPrimary : theme.glassBackground)
                         )
                 }
                 .buttonStyle(.plain)
