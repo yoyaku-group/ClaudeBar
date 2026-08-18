@@ -172,6 +172,18 @@ public final class JSONSettingsRepository:
         store.write(value: sort.rawValue, key: "app.overviewSort")
     }
 
+    public func menuBarGlyphMode() -> MenuBarGlyphMode {
+        guard let raw = store.read(key: "app.menuBarGlyphMode") as? String,
+              let mode = MenuBarGlyphMode(rawValue: raw) else {
+            return .text
+        }
+        return mode
+    }
+
+    public func setMenuBarGlyphMode(_ mode: MenuBarGlyphMode) {
+        store.write(value: mode.rawValue, key: "app.menuBarGlyphMode")
+    }
+
     public func backgroundSyncEnabled() -> Bool {
         store.read(key: "app.backgroundSyncEnabled") ?? false
     }

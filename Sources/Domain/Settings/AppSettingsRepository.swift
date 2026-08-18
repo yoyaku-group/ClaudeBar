@@ -58,6 +58,10 @@ public protocol AppSettingsRepository: Sendable {
     func overviewSort() -> OverviewSort
     func setOverviewSort(_ sort: OverviewSort)
 
+    /// What the menu-bar glyph shows (text / running cat / both).
+    func menuBarGlyphMode() -> MenuBarGlyphMode
+    func setMenuBarGlyphMode(_ mode: MenuBarGlyphMode)
+
     // MARK: - Background Sync
 
     func backgroundSyncEnabled() -> Bool

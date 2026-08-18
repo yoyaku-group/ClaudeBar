@@ -77,6 +77,16 @@ final class StatusItemLabelDriver {
         /// label keeps comparing equal across ticks and never repaints for the
         /// blink alone (see `render`'s early-out).
         var colonVisible: Bool = true
+        /// Glyph mode (text / running cat / both). Carried so flipping the
+        /// setting in Settings repaints the menu bar.
+        var glyphMode: MenuBarGlyphMode = .text
+        /// Current stride frame of the running cat. Advances on the cat timer,
+        /// so each tick produces unequal content and repaints — same trick as
+        /// `colonVisible`.
+        var catFrame: Int = 0
+        /// Worst remaining percentage across all enabled providers — drives the
+        /// cat's continuous green→amber→red tint. nil = no data (gray cat).
+        var catHealthPercent: Double?
     }
 
     /// Attaches to the `NSStatusItem` exposed by MenuBarExtraAccess and starts
@@ -96,6 +106,7 @@ final class StatusItemLabelDriver {
         labelSync = sync
         sync.start()
         startBlinkLifecycle()
+        startCatLifecycle()
 
         // SwiftUI wipes `button.image` whenever the scene re-evaluates (every
         // dropdown open/close flips the `isPresented` binding). Restore it
@@ -152,8 +163,25 @@ final class StatusItemLabelDriver {
             themeModeId: settings.themeMode,
             stacked: settings.menuBarStackedEnabled,
             stackedSize: settings.menuBarStackedSize,
-            colonVisible: hasCountdownColon ? blinkPhase : true
+            colonVisible: hasCountdownColon ? blinkPhase : true,
+            glyphMode: settings.menuBarGlyphMode,
+            catFrame: catFrameIndex,
+            catHealthPercent: worstEnabledPercent
         )
+    }
+
+    /// Worst percentage remaining across every enabled provider's windows —
+    /// the number the cat's tint tracks (matches the overview's "worst"
+    /// semantics). nil when no provider has produced data yet.
+    private var worstEnabledPercent: Double? {
+        var worst: Double?
+        for provider in monitor.enabledProviders {
+            guard let snapshot = provider.snapshot else { continue }
+            for quota in snapshot.quotas where !quota.isDollarBased {
+                worst = min(worst ?? quota.percentRemaining, quota.percentRemaining)
+            }
+        }
+        return worst
     }
 
     /// Bridges a momentarily-missing menu-bar label. The configured quota window
@@ -217,7 +245,17 @@ final class StatusItemLabelDriver {
             parts.append(symbolImage("terminal.fill", color: NSColor(phase.color)))
         }
 
-        if let label = content.label {
+        // Running cat (RunCat-style): its tint continuously reflects overall
+        // quota health — animation + status in a single glyph. In `.cat` mode
+        // it replaces the text readout entirely (the tooltip keeps the text).
+        if content.glyphMode.showsCat {
+            parts.append(RunningCatRenderer.image(
+                frame: content.catFrame,
+                color: Self.catTint(for: content.catHealthPercent)
+            ))
+        }
+
+        if content.glyphMode.showsText, let label = content.label {
             // Stacked mode only applies to a dual-window label: two windows
             // become two smaller lines (halving the width the label needs).
             // Anything else, including a dual label with stacking off, keeps
@@ -237,7 +275,7 @@ final class StatusItemLabelDriver {
                     colonVisible: content.colonVisible
                 ))
             }
-        } else {
+        } else if !content.glyphMode.showsCat {
             let symbolName = theme.statusBarIconName ?? fallbackIconName(for: content.fallbackStatus)
             parts.append(symbolImage(
                 symbolName,
@@ -246,6 +284,37 @@ final class StatusItemLabelDriver {
         }
 
         return hStack(parts, spacing: 3)
+    }
+
+    /// Continuous green→amber→red tint for the cat's health, interpolated —
+    /// no hard status bands, so the color "glides" as quotas drain (Ben:
+    /// « un chat qui change de couleur subtilement »). nil (no data) = gray.
+    static func catTint(for percent: Double?) -> NSColor {
+        guard let percent else {
+            return NSColor.systemGray
+        }
+        let green = NSColor(red: 0.19, green: 0.82, blue: 0.35, alpha: 1)   // #30D158
+        let amber = NSColor(red: 1.0, green: 0.58, blue: 0.0, alpha: 1)     // #FF9500
+        let red = NSColor(red: 1.0, green: 0.27, blue: 0.23, alpha: 1)      // #FF453A
+        let clamped = min(max(percent, 0), 100)
+        switch clamped {
+        case 40...100:
+            return interpolate(green, amber, (100 - clamped) / 60)
+        case 5..<40:
+            return interpolate(amber, red, (40 - clamped) / 35)
+        default:
+            return red
+        }
+    }
+
+    private static func interpolate(_ a: NSColor, _ b: NSColor, _ t: Double) -> NSColor {
+        let t = CGFloat(min(max(t, 0), 1))
+        return NSColor(
+            red: a.redComponent + (b.redComponent - a.redComponent) * t,
+            green: a.greenComponent + (b.greenComponent - a.greenComponent) * t,
+            blue: a.blueComponent + (b.blueComponent - a.blueComponent) * t,
+            alpha: 1
+        )
     }
 
     private static func fallbackIconName(for status: QuotaStatus) -> String {
@@ -345,6 +414,57 @@ final class StatusItemLabelDriver {
         blinkTimer = nil
         // Never leave the colon parked in its dimmed phase.
         blinkPhase = true
+        labelSync?.refreshNow()
+    }
+
+    // MARK: - Cat Animation
+
+    /// ~10 fps — a RunCat-cadence run. The composed cat is ~16pt, so the
+    /// redraw cost is negligible; the timer only runs while the cat is shown.
+    private static let catFrameInterval: TimeInterval = 0.1
+
+    private var catTimer: Timer?
+    private var catFrameIndex = 0
+    private var catSync: ObservationRenderSync<Bool>?
+
+    /// Sibling of `startBlinkLifecycle`: runs the stride timer only while the
+    /// glyph mode includes the cat, and never when the user asked the system
+    /// for reduced motion (static frame instead).
+    private func startCatLifecycle() {
+        guard catSync == nil else { return }
+        let sync = ObservationRenderSync<Bool>(
+            read: { [self] in settings.menuBarGlyphMode.showsCat },
+            render: { [self] showsCat in
+                let animate = showsCat && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+                animate ? startCatTimer() : stopCatTimer()
+            }
+        )
+        catSync = sync
+        sync.start()
+    }
+
+    private func startCatTimer() {
+        guard catTimer == nil else { return }
+        let timer = Timer(timeInterval: Self.catFrameInterval, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.catFrameIndex = (self.catFrameIndex + 1) % RunningCatRenderer.frameCount
+                // refreshNow keeps the observation registration intact and the
+                // equality early-out in render() — each tick's frame index
+                // differs, so exactly one repaint happens.
+                self.labelSync?.refreshNow()
+            }
+        }
+        // .common: keep running while any menu is open (tracking mode).
+        RunLoop.main.add(timer, forMode: .common)
+        catTimer = timer
+    }
+
+    private func stopCatTimer() {
+        guard catTimer != nil else { return }
+        catTimer?.invalidate()
+        catTimer = nil
+        catFrameIndex = 0
         labelSync?.refreshNow()
     }
 

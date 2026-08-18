@@ -130,6 +130,13 @@ public final class AppSettings {
         }
     }
 
+    /// What the menu-bar glyph shows (text / running cat / both).
+    public var menuBarGlyphMode: MenuBarGlyphMode {
+        didSet {
+            repository.setMenuBarGlyphMode(menuBarGlyphMode)
+        }
+    }
+
     // MARK: - Background Sync Settings
 
     /// Whether background sync is enabled (default: false)
@@ -249,6 +256,7 @@ public final class AppSettings {
         self.overviewModeEnabled = repository.overviewModeEnabled()
         self.overviewWindowFilter = repository.overviewWindowFilter()
         self.overviewSort = repository.overviewSort()
+        self.menuBarGlyphMode = repository.menuBarGlyphMode()
         self.backgroundSyncEnabled = repository.backgroundSyncEnabled()
         self.backgroundSyncInterval = repository.backgroundSyncInterval()
         self.menuBarPercentageEnabled = repository.menuBarPercentageEnabled()
