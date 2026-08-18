@@ -1,12 +1,11 @@
 name: Build YOYAKU Theme
 
+# Manual only (rules/02 — no CI on push). Run via workflow_dispatch on the
+# branch you want to verify; the produced zip is the unsigned install artifact.
 on:
-  push:
-    branches: [feat/yoyaku-theme]
   workflow_dispatch:
 
 env:
-  SWIFT_VERSION: "6.2"
   APP_NAME: ClaudeBar
 
 jobs:
@@ -18,10 +17,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Swift
-        uses: SwiftyLab/setup-swift@latest
-        with:
-          swift-version: ${{ env.SWIFT_VERSION }}
+      # No explicit Swift toolchain setup: use the runner's bundled Xcode, the
+      # same toolchain Tuist builds its macro prebuilts (SwiftSyntax) against.
+      # Installing a separate toolchain via SwiftyLab/setup-swift drifted out of
+      # sync with those prebuilts and broke the build (same fix as release.yml).
 
       - name: Install Tuist
         run: brew install tuist
@@ -38,6 +37,9 @@ jobs:
         run: |
           tuist generate --no-open
           ./scripts/fix-swiftterm-metal.sh
+
+      - name: Run Infrastructure Tests
+        run: tuist test InfrastructureTests
 
       - name: Build Release
         run: |
