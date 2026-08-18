@@ -91,6 +91,22 @@ struct ClaudeBarApp: App {
             ),
             GeminiProvider(probe: GeminiUsageProbe(), settingsRepository: settingsRepository),
             AntigravityProvider(probe: AntigravityUsageProbe(), settingsRepository: settingsRepository),
+            // Ecosystem quota SSOT: Qwen (CGU-mandated manual quota — no API
+            // polling, ever) + any provider whose native probe is disabled.
+            // Natively-enabled providers are skipped so rows never duplicate.
+            LLMRouterProvider(
+                probe: LLMRouterStateProbe(
+                    skipSlugs: [
+                        ("glm_pro", "zai"),
+                        ("minimax_max", "minimax"),
+                        ("kimi", "kimi"),
+                        ("bedrock", "bedrock"),
+                    ]
+                    .filter { settingsRepository.isEnabled(forProvider: $0.1, defaultValue: true) }
+                    .map(\.0)
+                ),
+                settingsRepository: settingsRepository
+            ),
             ZaiProvider(
                 probe: ZaiUsageProbe(settingsRepository: settingsRepository),
                 settingsRepository: settingsRepository

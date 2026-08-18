@@ -35,7 +35,9 @@ public enum OverviewBuilder {
                     )
                 }
             }
-            // Single-account provider: one row from the aggregate snapshot.
+            // Single-account provider: one row per quota group (aggregating
+            // providers like llm-router get one row per upstream LLM),
+            // falling back to a single row when no groups are set.
             guard let snapshot = provider.snapshot else {
                 if provider.isSyncing {
                     return [ProviderSnapshot(
@@ -57,25 +59,72 @@ public enum OverviewBuilder {
                     errorMessage: provider.lastError?.localizedDescription
                 )]
             }
-            return [row(
+            var rows = groupedRows(
                 providerId: provider.id,
                 providerName: provider.name,
-                rowId: provider.id,
-                accountLabel: nil,
                 snapshot: snapshot
-            )]
+            )
+            // Errored upstream groups (no windows, e.g. Kimi creds expired)
+            // become badge rows — visible, never faked.
+            if let reporting = provider as? any GroupErrorReporting {
+                let withWindows = Set(rows.compactMap(\.accountLabel))
+                for (group, message) in reporting.lastGroupErrors.sorted(by: { $0.key < $1.key })
+                where !withWindows.contains(group) {
+                    rows.append(ProviderSnapshot(
+                        id: "\(provider.id)|\(group)",
+                        providerId: provider.id,
+                        providerName: group,
+                        accountLabel: nil,
+                        windows: [],
+                        isSyncing: false,
+                        errorMessage: message
+                    ))
+                }
+            }
+            return rows
         }
     }
 
-    /// Builds one row from a usage snapshot.
-    private static func row(
+    /// Splits a snapshot into one row per quota `group`; ungrouped quotas
+    /// collapse into a single provider-named row.
+    private static func groupedRows(
         providerId: String,
         providerName: String,
-        rowId: String,
-        accountLabel: String?,
         snapshot: UsageSnapshot
-    ) -> ProviderSnapshot {
-        let windows = snapshot.quotas.map { quota in
+    ) -> [ProviderSnapshot] {
+        let grouped = Dictionary(grouping: snapshot.quotas, by: { $0.group })
+        guard !grouped.isEmpty else {
+            return [ProviderSnapshot(
+                id: providerId,
+                providerId: providerId,
+                providerName: providerName,
+                accountLabel: nil,
+                windows: []
+            )]
+        }
+        // A single nil-group bucket keeps the provider's own name; named
+        // groups each get their identity as the row title.
+        if grouped.count == 1, grouped.keys.first == nil || grouped.keys.first?.isEmpty == true {
+            let quotas = grouped[nil] ?? grouped[""] ?? []
+            return [rowFromQuotas(providerId: providerId, providerName: providerName, rowId: providerId, accountLabel: nil, quotas: quotas)]
+        }
+        return grouped.keys
+            .sorted { ($0 ?? "") < ($1 ?? "") }
+            .compactMap { key in
+                guard let key, !key.isEmpty else { return nil }
+                let quotas = grouped[key] ?? []
+                return ProviderSnapshot(
+                    id: "\(providerId)|\(key)",
+                    providerId: providerId,
+                    providerName: key,
+                    accountLabel: nil,
+                    windows: quotas.map(windowSnapshot(rowId: "\(providerId)|\(key)"))
+                )
+            }
+    }
+
+    private static func windowSnapshot(rowId: String) -> (UsageQuota) -> WindowSnapshot {
+        { quota in
             WindowSnapshot(
                 id: "\(rowId)|\(quota.quotaType.displayName)|\(quota.group ?? "")",
                 title: quota.compactTitle ?? quota.quotaType.shortLabel,
@@ -87,12 +136,39 @@ public enum OverviewBuilder {
                 formattedDollarRemaining: quota.formattedDollarRemaining
             )
         }
-        return ProviderSnapshot(
+    }
+
+    private static func rowFromQuotas(
+        providerId: String,
+        providerName: String,
+        rowId: String,
+        accountLabel: String?,
+        quotas: [UsageQuota]
+    ) -> ProviderSnapshot {
+        ProviderSnapshot(
             id: rowId,
             providerId: providerId,
             providerName: providerName,
             accountLabel: accountLabel,
-            windows: windows
+            windows: quotas.map(windowSnapshot(rowId: rowId))
+        )
+    }
+
+    /// Builds one row from a usage snapshot (multi-account path — one row per
+    /// account; groups stay together because each account is its own identity).
+    private static func row(
+        providerId: String,
+        providerName: String,
+        rowId: String,
+        accountLabel: String?,
+        snapshot: UsageSnapshot
+    ) -> ProviderSnapshot {
+        rowFromQuotas(
+            providerId: providerId,
+            providerName: providerName,
+            rowId: rowId,
+            accountLabel: accountLabel,
+            quotas: snapshot.quotas
         )
     }
 

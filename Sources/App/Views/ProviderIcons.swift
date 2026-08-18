@@ -98,6 +98,7 @@ struct ProviderIconView: View {
         case "deepseek": return "d.square.fill"
         case "opencode-go": return "square.stack.3d.up.fill"
         case "omp": return "terminal.fill"
+        case "llm-router": return "arrow.triangle.branch"
         case "grok": return "line.diagonal"
         case "vercel-gateway": return "triangle.fill"
         default: return "questionmark"
