@@ -122,6 +122,10 @@ public struct ProviderSnapshot: Identifiable, Sendable, Hashable {
     public let providerName: String
     /// Account discriminator ("Default", "Admin"…) — nil for single-account providers.
     public let accountLabel: String?
+    /// Account email for multi-account disambiguation (Ben 2026-08-19: needed
+    /// to tell which Claude account was at 0% — "Default"/"Admin" labels are
+    /// not enough when two profiles share the same provider).
+    public let accountEmail: String?
     public let windows: [WindowSnapshot]
     public let isSyncing: Bool
     public let errorMessage: String?
@@ -150,6 +154,7 @@ public struct ProviderSnapshot: Identifiable, Sendable, Hashable {
         providerId: String,
         providerName: String,
         accountLabel: String?,
+        accountEmail: String? = nil,
         windows: [WindowSnapshot],
         isSyncing: Bool = false,
         errorMessage: String? = nil
@@ -158,6 +163,7 @@ public struct ProviderSnapshot: Identifiable, Sendable, Hashable {
         self.providerId = providerId
         self.providerName = providerName
         self.accountLabel = accountLabel
+        self.accountEmail = accountEmail
         self.windows = windows
         self.isSyncing = isSyncing
         self.errorMessage = errorMessage

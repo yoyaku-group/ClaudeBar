@@ -25,6 +25,7 @@ public enum OverviewBuilder {
                             providerId: provider.id,
                             providerName: provider.name,
                             accountLabel: account.displayName,
+                            accountEmail: account.email,
                             windows: [],
                             isSyncing: true
                         )
@@ -34,6 +35,7 @@ public enum OverviewBuilder {
                         providerName: provider.name,
                         rowId: "\(provider.id)|\(account.accountId)",
                         accountLabel: multi.accounts.count > 1 ? account.displayName : nil,
+                        accountEmail: multi.accounts.count > 1 ? account.email : nil,
                         snapshot: snapshot
                     )
                 }
@@ -149,6 +151,7 @@ public enum OverviewBuilder {
         providerName: String,
         rowId: String,
         accountLabel: String?,
+        accountEmail: String? = nil,
         quotas: [UsageQuota]
     ) -> ProviderSnapshot {
         ProviderSnapshot(
@@ -156,6 +159,7 @@ public enum OverviewBuilder {
             providerId: providerId,
             providerName: providerName,
             accountLabel: accountLabel,
+            accountEmail: accountEmail,
             windows: quotas.map(windowSnapshot(rowId: rowId))
         )
     }
@@ -167,6 +171,7 @@ public enum OverviewBuilder {
         providerName: String,
         rowId: String,
         accountLabel: String?,
+        accountEmail: String? = nil,
         snapshot: UsageSnapshot
     ) -> ProviderSnapshot {
         rowFromQuotas(
@@ -174,6 +179,7 @@ public enum OverviewBuilder {
             providerName: providerName,
             rowId: rowId,
             accountLabel: accountLabel,
+            accountEmail: accountEmail,
             quotas: snapshot.quotas
         )
     }
