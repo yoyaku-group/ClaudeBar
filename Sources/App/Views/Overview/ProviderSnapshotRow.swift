@@ -72,6 +72,15 @@ struct ProviderSnapshotRow: View {
                         .foregroundStyle(theme.textTertiary)
                         .lineLimit(1)
                 }
+                // Email shown only for multi-account providers so two Claude
+                // profiles are unambiguous at a glance (Ben 2026-08-19).
+                if let email = snapshot.accountEmail {
+                    Text(email)
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundStyle(theme.textTertiary.opacity(0.85))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
             }
 
             Spacer(minLength: 8)
