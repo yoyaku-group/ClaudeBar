@@ -2,9 +2,9 @@ import SwiftUI
 import Domain
 
 /// One dashboard row: a provider (or one account of a multi-account provider)
-/// with its worst filtered window as the headline, a progress bar, and one
-/// compact line per window showing remaining % and relative time-to-reset
-/// ("3d", "4:59"). Never mixes absolute dates — resets are relative only.
+/// with its worst filtered window as the headline, plus two stacked bars
+/// comparing the Session 5h and Weekly 7d windows at a glance (Ben 2026-08-19).
+/// Never mixes absolute dates — resets are relative only.
 struct ProviderSnapshotRow: View {
     let snapshot: ProviderSnapshot
     let filter: OverviewWindowFilter
@@ -12,16 +12,19 @@ struct ProviderSnapshotRow: View {
     @Environment(\.appTheme) private var theme
     @Environment(\.colorScheme) private var colorScheme
 
-    private var visibleWindows: [WindowSnapshot] {
-        snapshot.windows.filter { filter.matches($0.scope) }
+    /// Session (5h) window for this provider, if any.
+    private var sessionWindow: WindowSnapshot? {
+        snapshot.windows.first { $0.scope == .session }
+    }
+
+    /// Weekly (7d) window for this provider, if any.
+    private var weeklyWindow: WindowSnapshot? {
+        snapshot.windows.first { $0.scope == .weekly }
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             header
-            if let worst = snapshot.worstWindow(matching: filter), !worst.isDollarBased {
-                progressBar(percent: worst.percentRemaining)
-            }
             if snapshot.errorMessage != nil {
                 errorBadge
             } else if snapshot.isSyncing {
@@ -29,7 +32,16 @@ struct ProviderSnapshotRow: View {
                     .font(theme.font(size: 11, weight: .medium))
                     .foregroundStyle(theme.textTertiary)
             } else {
-                windowLines
+                WindowBarView(
+                    window: sessionWindow,
+                    scopeLabel: "5h",
+                    isPrimary: filter == .session || filter == .all
+                )
+                WindowBarView(
+                    window: weeklyWindow,
+                    scopeLabel: "7d",
+                    isPrimary: filter == .weekly || filter == .all
+                )
             }
         }
         .padding(12)
@@ -89,35 +101,44 @@ struct ProviderSnapshotRow: View {
         }
     }
 
-    // MARK: - Progress
+    // MARK: - Error
 
-    private func progressBar(percent: Double) -> some View {
-        GeometryReader { geo in
-            ZStack(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(Color.primary.opacity(0.08))
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(theme.progressGradient(for: percent))
-                    .frame(width: max(4, geo.size.width * min(max(percent, 0), 100) / 100))
-            }
+    private var errorBadge: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(theme.font(size: 10))
+                .foregroundStyle(theme.statusWarning)
+            Text(snapshot.errorMessage ?? "Unavailable")
+                .font(theme.font(size: 11, weight: .medium))
+                .foregroundStyle(theme.textTertiary)
+                .lineLimit(1)
+            Spacer(minLength: 0)
         }
-        .frame(height: 5)
     }
+}
 
-    // MARK: - Windows
+/// One horizontal quota bar with its scope label, remaining %, and relative
+/// reset time. Used twice per provider row (5h + 7d). When `window` is nil,
+/// renders a muted stub bar so the row height stays consistent across
+/// providers regardless of how many windows they expose. `isPrimary` drives
+/// the 0.5 opacity that anchors the user's R11 filter choice without hiding
+/// the comparison data.
+struct WindowBarView: View {
+    let window: WindowSnapshot?
+    let scopeLabel: String
+    let isPrimary: Bool
 
-    /// One compact line per window: title · % left · relative reset.
-    private var windowLines: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            ForEach(visibleWindows) { window in
-                HStack(spacing: 6) {
-                    Text(window.title)
-                        .font(theme.font(size: 11, weight: .medium))
-                        .foregroundStyle(theme.textSecondary)
-                        .lineLimit(1)
+    @Environment(\.appTheme) private var theme
 
-                    Spacer(minLength: 4)
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 6) {
+                Text(scopeLabel)
+                    .font(theme.font(size: 10, weight: .semibold))
+                    .foregroundStyle(theme.textTertiary)
+                    .frame(width: 22, alignment: .leading)
 
+                if let window {
                     if window.isDollarBased, let dollars = window.formattedDollarRemaining {
                         Text(dollars)
                             .font(theme.font(size: 11, weight: .semibold))
@@ -133,23 +154,33 @@ struct ProviderSnapshotRow: View {
                         .foregroundStyle(theme.textTertiary)
                         .monospacedDigit()
                         .frame(minWidth: 34, alignment: .trailing)
+                } else {
+                    Text("—")
+                        .font(theme.font(size: 11, weight: .medium))
+                        .foregroundStyle(theme.textTertiary)
+                }
+
+                Spacer(minLength: 0)
+            }
+
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(theme.progressTrack)
+                    if let window, !window.isDollarBased {
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(theme.progressGradient(for: window.percentRemaining))
+                            .frame(width: max(4, geo.size.width * min(max(window.percentRemaining, 0), 100) / 100))
+                    } else if window == nil {
+                        // 2 % stub so the track is visible without claiming a value.
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(theme.textTertiary.opacity(0.3))
+                            .frame(width: max(4, geo.size.width * 0.02))
+                    }
                 }
             }
+            .frame(height: 5)
         }
-    }
-
-    // MARK: - Error
-
-    private var errorBadge: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(theme.font(size: 10))
-                .foregroundStyle(theme.statusWarning)
-            Text(snapshot.errorMessage ?? "Unavailable")
-                .font(theme.font(size: 11, weight: .medium))
-                .foregroundStyle(theme.textTertiary)
-                .lineLimit(1)
-            Spacer(minLength: 0)
-        }
+        .opacity(isPrimary ? 1.0 : 0.5)
     }
 }
