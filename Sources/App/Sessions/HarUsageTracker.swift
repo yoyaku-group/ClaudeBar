@@ -30,7 +30,7 @@ public final class HarUsageTracker {
     /// directory trees; the guardian tail is a single file read).
     private static let scanInterval: TimeInterval = 300
     private static let activityFileURL = URL(fileURLWithPath:
-        (("~/.claudebar/har-activity.jsonl" as NSString).expandingTilde as String)
+        (("~/.claudebar/har-activity.jsonl" as NSString).expandingTildeInPath as String)
     )
     private static let rotationBytes = 2_000_000
 

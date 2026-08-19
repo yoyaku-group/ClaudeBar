@@ -12,7 +12,7 @@ import Domain
 public enum GuardianStateReader {
 
     public static let stateURL = URL(fileURLWithPath:
-        (("~/.claude/state/guardian/state.json" as NSString).expandingTilde as String)
+        (("~/.claude/state/guardian/state.json" as NSString).expandingTildeInPath as String)
     )
 
     /// Plugin-parity staleness gate (the SwiftBar plugin used 180 s).
@@ -27,7 +27,7 @@ public enum GuardianStateReader {
         /// shows "muet (Nmin)" and never green.
         public let isStale: Bool
 
-        public struct Metrics: Sendable, Equatable {
+        public struct Metrics: Sendable, Equatable, Decodable {
             public let swapUsedPct: Double?
             public let ramFreePct: Double?
             public let load1: Double?
@@ -49,7 +49,7 @@ public enum GuardianStateReader {
             }
         }
 
-        public struct Finding: Sendable, Equatable {
+        public struct Finding: Sendable, Equatable, Decodable {
             public let rule: String
             public let severity: String
             public let message: String

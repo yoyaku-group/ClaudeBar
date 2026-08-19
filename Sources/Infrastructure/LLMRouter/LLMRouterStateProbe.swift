@@ -45,7 +45,7 @@ public final class LLMRouterStateProbe: UsageProbe, GroupErrorReporting, @unchec
     public private(set) var lastGroupErrors: [String: String] = [:]
 
     public init(
-        cliPath: String = (("~/.local/bin/llm-router" as NSString).expandingTilde as String),
+        cliPath: String = (("~/.local/bin/llm-router" as NSString).expandingTildeInPath as String),
         timeout: TimeInterval = 15,
         skipSlugs: Set<String> = [],
         clock: @escaping () -> Date = Date.init
