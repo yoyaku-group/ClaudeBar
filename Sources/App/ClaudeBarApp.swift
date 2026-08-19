@@ -98,6 +98,13 @@ struct ClaudeBarApp: App {
             // Ecosystem quota SSOT: Qwen (CGU-mandated manual quota — no API
             // polling, ever) + any provider whose native probe is disabled.
             // Natively-enabled providers are skipped so rows never duplicate.
+            // Phase 0c (2026-08-19): qwen_personal_pro → alibaba entry added so
+            // the LLMRouterProvider stops emitting its own qwen_personal_pro row
+            // when the native Alibaba probe is enabled. Without this, ClaudeBar
+            // shows the same Qwen plan twice: once via the LLM-router adapter
+            // and once via AlibabaUsageProbe (which currently fails on
+            // ConsoleNeedLogin). Cookie-based source (Phase 2b) is a separate
+            // concern — the skipSlugs entry alone fixes the duplicate today.
             LLMRouterProvider(
                 probe: LLMRouterStateProbe(
                     skipSlugs: [
@@ -105,6 +112,7 @@ struct ClaudeBarApp: App {
                         ("minimax_max", "minimax"),
                         ("kimi", "kimi"),
                         ("bedrock", "bedrock"),
+                        ("qwen_personal_pro", "alibaba"),
                     ]
                     .filter { settingsRepository.isEnabled(forProvider: $0.1, defaultValue: true) }
                     .map(\.0)
