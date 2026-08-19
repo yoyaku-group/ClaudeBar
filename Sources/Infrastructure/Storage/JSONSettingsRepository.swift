@@ -149,7 +149,7 @@ public final class JSONSettingsRepository:
     }
 
     public func overviewWindowFilter() -> OverviewWindowFilter {
-        guard let raw = store.read(key: "app.overviewWindowFilter") as? String,
+        guard let raw: String = store.read(key: "app.overviewWindowFilter"),
               let filter = OverviewWindowFilter(rawValue: raw) else {
             return .all
         }
@@ -161,7 +161,7 @@ public final class JSONSettingsRepository:
     }
 
     public func overviewSort() -> OverviewSort {
-        guard let raw = store.read(key: "app.overviewSort") as? String,
+        guard let raw: String = store.read(key: "app.overviewSort"),
               let sort = OverviewSort(rawValue: raw) else {
             return .percentRemaining
         }
@@ -173,7 +173,7 @@ public final class JSONSettingsRepository:
     }
 
     public func menuBarGlyphMode() -> MenuBarGlyphMode {
-        guard let raw = store.read(key: "app.menuBarGlyphMode") as? String,
+        guard let raw: String = store.read(key: "app.menuBarGlyphMode"),
               let mode = MenuBarGlyphMode(rawValue: raw) else {
             return .text
         }

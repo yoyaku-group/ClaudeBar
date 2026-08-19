@@ -160,6 +160,8 @@ public final class LLMRouterStateProbe: UsageProbe, GroupErrorReporting, @unchec
         switch kind ?? "" {
         case let k where k.contains("hour"): return .session
         case let k where k.contains("week") || k.contains("seven"): return .weekly
+        // Qwen's CGU-mandated manual quota tracks the weekly plan window.
+        case let k where k.contains("manual"): return .weekly
         case let k where k.contains("scoped"):
             return .modelSpecific("scoped")
         default: return .timeLimit(kind ?? "fenêtre")
