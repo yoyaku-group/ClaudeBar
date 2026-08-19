@@ -87,6 +87,11 @@ final class StatusItemLabelDriver {
         /// Worst remaining percentage across all enabled providers — drives the
         /// cat's continuous green→amber→red tint. nil = no data (gray cat).
         var catHealthPercent: Double?
+        /// Active multi-account email (when the selected provider is a
+        /// MultiAccountProvider with ≥2 accounts). Surfaced in the tooltip so
+        /// Ben can identify which Claude profile is logged in at a glance —
+        /// the menu-bar glyph itself doesn't carry it (cat + percentage only).
+        var accountEmail: String?
     }
 
     /// Attaches to the `NSStatusItem` exposed by MenuBarExtraAccess and starts
@@ -156,6 +161,15 @@ final class StatusItemLabelDriver {
         let label = freshLabel ?? lastKnownLabel(whenFreshIsMissing: freshLabel)
         let hasCountdownColon = label.map { !CountdownColon.ranges(in: $0.text).isEmpty } ?? false
 
+        // Email of the active multi-account profile (only when the selected
+        // provider is multi-account). Surfaced in the tooltip so two Claude
+        // profiles stay distinguishable from the menu bar alone.
+        let accountEmail: String? = {
+            guard let multi = monitor.selectedProvider as? any MultiAccountProvider,
+                  multi.accounts.count > 1 else { return nil }
+            return multi.activeAccount.email
+        }()
+
         return LabelContent(
             label: label,
             fallbackStatus: effectiveSelectedProviderStatus,
@@ -166,7 +180,8 @@ final class StatusItemLabelDriver {
             colonVisible: hasCountdownColon ? blinkPhase : true,
             glyphMode: settings.menuBarGlyphMode,
             catFrame: catFrameIndex,
-            catHealthPercent: worstEnabledPercent
+            catHealthPercent: worstEnabledPercent,
+            accountEmail: accountEmail
         )
     }
 
@@ -220,7 +235,14 @@ final class StatusItemLabelDriver {
         lastImage = image
         button.image = image
         button.imagePosition = .imageOnly
-        button.toolTip = content.label?.text
+        // Tooltip: prepend the multi-account email so hovering reveals which
+        // Claude profile is logged in. Falls back to label text when the
+        // provider is single-account (no disambiguation needed).
+        if let email = content.accountEmail {
+            button.toolTip = "\(email) — \(content.label?.text ?? "")"
+        } else {
+            button.toolTip = content.label?.text
+        }
     }
 
     private func resolvedTheme(for themeModeId: String) -> any AppThemeProvider {
