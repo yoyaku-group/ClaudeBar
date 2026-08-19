@@ -10,7 +10,7 @@ struct OverviewBuilderTests {
 
     // MARK: - Stubs
 
-    final class StubProvider: AIProvider {
+    class StubProvider: AIProvider {
         let id: String
         let name: String
         var isEnabled = true
@@ -38,8 +38,8 @@ struct OverviewBuilderTests {
             let label: String
         }
 
-        var shimAccounts: [Account]
-        var shimSnapshots: [String: UsageSnapshot]
+        var shimAccounts: [Account] = []
+        var shimSnapshots: [String: UsageSnapshot] = [:]
 
         var accounts: [ProviderAccount] {
             shimAccounts.map {
