@@ -41,6 +41,9 @@ jobs:
       - name: Run Infrastructure Tests
         run: tuist test Infrastructure
 
+      - name: Run Domain Tests
+        run: tuist test Domain
+
       - name: Build Release
         run: |
           xcodebuild archive \

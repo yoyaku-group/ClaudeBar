@@ -10,6 +10,9 @@ public enum OverviewBuilder {
 
     // MARK: - Build
 
+    /// Reads @MainActor provider state — call from the main actor (views,
+    /// tests marked @MainActor).
+    @MainActor
     public static func build(providers: [any AIProvider]) -> [ProviderSnapshot] {
         providers.flatMap { provider -> [ProviderSnapshot] in
             if let multi = provider as? any MultiAccountProvider, !multi.accounts.isEmpty {
@@ -87,12 +90,15 @@ public enum OverviewBuilder {
 
     /// Splits a snapshot into one row per quota `group`; ungrouped quotas
     /// collapse into a single provider-named row.
+    ///
+    /// Grouping normalizes nil to "" so the keys are plain Strings (a
+    /// nil-keyed dictionary would make every access double-optional).
     private static func groupedRows(
         providerId: String,
         providerName: String,
         snapshot: UsageSnapshot
     ) -> [ProviderSnapshot] {
-        let grouped = Dictionary(grouping: snapshot.quotas, by: { $0.group })
+        let grouped = Dictionary(grouping: snapshot.quotas) { $0.group ?? "" }
         guard !grouped.isEmpty else {
             return [ProviderSnapshot(
                 id: providerId,
@@ -102,16 +108,16 @@ public enum OverviewBuilder {
                 windows: []
             )]
         }
-        // A single nil-group bucket keeps the provider's own name; named
+        // A single ""-group bucket keeps the provider's own name; named
         // groups each get their identity as the row title.
-        if grouped.count == 1, grouped.keys.first == nil || grouped.keys.first?.isEmpty == true {
-            let quotas = grouped[nil] ?? grouped[""] ?? []
+        if grouped.count == 1, grouped.keys.first?.isEmpty == true {
+            let quotas = grouped[""] ?? []
             return [rowFromQuotas(providerId: providerId, providerName: providerName, rowId: providerId, accountLabel: nil, quotas: quotas)]
         }
         return grouped.keys
-            .sorted { ($0 ?? "") < ($1 ?? "") }
-            .compactMap { key in
-                guard let key, !key.isEmpty else { return nil }
+            .filter { !$0.isEmpty }
+            .sorted()
+            .map { key in
                 let quotas = grouped[key] ?? []
                 return ProviderSnapshot(
                     id: "\(providerId)|\(key)",
