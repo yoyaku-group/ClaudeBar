@@ -39,7 +39,7 @@ jobs:
           ./scripts/fix-swiftterm-metal.sh
 
       - name: Run Infrastructure Tests
-        run: tuist test InfrastructureTests
+        run: tuist test Infrastructure
 
       - name: Build Release
         run: |
