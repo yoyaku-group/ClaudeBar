@@ -13,6 +13,12 @@ public enum ANSIStripper {
     /// CSI sequences: ESC [ <params> <final byte> — e.g. `ESC[3G` (column 3).
     private static let csiPattern = "\u{1B}\\[[0-9;?]*[ -/]*[@-~]"
 
+    /// Cursor-POSITION CSI sequences (final bytes G H f A B C D d ` and
+    /// relative movers). Removing them outright would concatenate the words
+    /// they separated ("Claude[10Gin" → "Claudein"), so they are replaced by
+    /// a single space instead.
+    private static let csiPositionPattern = "\u{1B}\\[[0-9;?]*[ -/]*[@-`GHDdf]"
+
     /// OSC sequences: ESC ] <payload> (BEL | ESC \) — e.g. window titles.
     private static let oscPattern = "\u{1B}\\][^\u{07}\u{1B}]*(?:\u{07}|\u{1B}\\\\)"
 
@@ -21,6 +27,13 @@ public enum ANSIStripper {
 
     /// Remaining C0 control characters except tab, newline and carriage return.
     private static let controlPattern = "[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1A\\x1C-\\x1F]"
+
+    private static let positionRegex: NSRegularExpression = {
+        guard let regex = try? NSRegularExpression(pattern: csiPositionPattern) else {
+            fatalError("ANSIStripper: invalid position pattern")
+        }
+        return regex
+    }()
 
     private static let combined: NSRegularExpression = {
         let pattern = "\(csiPattern)|\(oscPattern)|\(shortEscapePattern)|\(controlPattern)"
@@ -32,11 +45,21 @@ public enum ANSIStripper {
     }()
 
     /// Returns `text` with all ANSI escape sequences and stray control
-    /// characters removed. Line breaks and tabs are preserved.
+    /// characters removed. Cursor-position sequences become a single space
+    /// so word separation survives; line breaks and tabs are preserved.
     public static func strip(_ text: String) -> String {
-        let range = NSRange(text.startIndex..<text.endIndex, in: text)
         let mutable = NSMutableString(string: text)
-        combined.replaceMatches(in: mutable, options: [], range: range, withTemplate: "")
+        positionRegex.replaceMatches(
+            in: mutable, options: [],
+            range: NSRange(location: 0, length: mutable.length),
+            withTemplate: " "
+        )
+        // Recompute the range: the pass above may have shrunk the string.
+        combined.replaceMatches(
+            in: mutable, options: [],
+            range: NSRange(location: 0, length: mutable.length),
+            withTemplate: ""
+        )
         return mutable as String
     }
 }

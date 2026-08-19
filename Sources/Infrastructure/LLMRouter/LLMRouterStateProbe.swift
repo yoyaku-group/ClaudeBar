@@ -133,6 +133,13 @@ public final class LLMRouterStateProbe: UsageProbe, GroupErrorReporting, @unchec
         let remainingPct: Double?
         let resetsAt: String?
         let note: String?
+
+        enum CodingKeys: String, CodingKey {
+            case kind
+            case remainingPct = "remaining_pct"
+            case resetsAt = "resets_at"
+            case note
+        }
     }
 
     static func parse(_ data: Data, skipSlugs: Set<String> = []) throws -> (UsageSnapshot, [String: String]) {
