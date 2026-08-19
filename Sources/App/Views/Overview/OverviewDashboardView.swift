@@ -12,6 +12,7 @@ struct OverviewDashboardView: View {
     @Bindable var settings: AppSettings
 
     @Environment(\.appTheme) private var theme
+    @State private var calendarSnapshot: ProviderSnapshot?
 
     private var rows: [ProviderSnapshot] {
         OverviewBuilder.sort(
@@ -34,10 +35,17 @@ struct OverviewDashboardView: View {
             controls
             ForEach(rows) { row in
                 ProviderSnapshotRow(snapshot: row, filter: settings.overviewWindowFilter)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        calendarSnapshot = row
+                    }
             }
             if criticalCount > 0 {
                 footer
             }
+        }
+        .sheet(item: $calendarSnapshot) { snapshot in
+            ResetsCalendarSheet(snapshot: snapshot)
         }
     }
 
