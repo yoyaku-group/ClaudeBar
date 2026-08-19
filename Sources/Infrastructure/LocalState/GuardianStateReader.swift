@@ -103,26 +103,28 @@ public enum HarTranscriptCounter {
 
     private static let home = FileManager.default.homeDirectoryForCurrentUser
 
-    /// Directories whose `*.jsonl` transcripts touched within `window`
-    /// count as active sessions for that harness.
-    static var roots: [(dir: URL, key: WritableKeyPath<Counts, Int>)] {
+    /// Harness transcript roots. KeyPath-free on purpose: storing keypaths
+    /// in a static tuple exists as `any KeyPath & Sendable` under strict
+    /// concurrency, which then can't convert back for the write.
+    static var roots: [URL] {
         [
-            (home.appendingPathComponent(".claude/projects"), \.claude),
-            (home.appendingPathComponent(".codex/sessions"), \.codex),
-            (home.appendingPathComponent(".kimi-code/sessions"), \.kimi),
-            (home.appendingPathComponent(".qwen/projects"), \.qwen),
+            home.appendingPathComponent(".claude/projects"),
+            home.appendingPathComponent(".codex/sessions"),
+            home.appendingPathComponent(".kimi-code/sessions"),
+            home.appendingPathComponent(".qwen/projects"),
         ]
     }
 
     /// Counts transcripts modified within `window` (default 24 h) across the
     /// harness roots. Cheap enough at 5-minute cadence; never call per-frame.
     public static func countActive(within window: TimeInterval = 86_400, now: Date = Date()) -> Counts {
-        var counts = Counts(claude: 0, codex: 0, kimi: 0, qwen: 0)
         let cutoff = now.addingTimeInterval(-window)
-        for root in roots {
-            counts[keyPath: root.key] = countJSONL(in: root.dir, modifiedAfter: cutoff)
-        }
-        return counts
+        return Counts(
+            claude: countJSONL(in: roots[0], modifiedAfter: cutoff),
+            codex: countJSONL(in: roots[1], modifiedAfter: cutoff),
+            kimi: countJSONL(in: roots[2], modifiedAfter: cutoff),
+            qwen: countJSONL(in: roots[3], modifiedAfter: cutoff)
+        )
     }
 
     /// Walks `dir` (two levels — enough for ~/.claude/projects/<munged-cwd>/

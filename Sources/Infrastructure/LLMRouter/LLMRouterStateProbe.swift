@@ -61,22 +61,34 @@ public final class LLMRouterStateProbe: UsageProbe, GroupErrorReporting, @unchec
     }
 
     public func probe() async throws -> UsageSnapshot {
-        lock.lock()
-        if let cachedAt, let cachedSnapshot,
-           clock().timeIntervalSince(cachedAt) < Self.cacheTTL {
-            lock.unlock()
-            return cachedSnapshot
+        if let cached = cachedSnapshotIfFresh() {
+            return cached
         }
-        lock.unlock()
 
         let json = try await runCLI()
         let (snapshot, groupErrors) = try Self.parse(json, skipSlugs: skipSlugs)
+        storeCache(snapshot, groupErrors: groupErrors)
+        return snapshot
+    }
+
+    /// Locking lives in these synchronous helpers — NSLock.lock() is
+    /// unavailable from async contexts under Swift 6 concurrency checking.
+    private func cachedSnapshotIfFresh() -> UsageSnapshot? {
         lock.lock()
+        defer { lock.unlock() }
+        guard let cachedAt, let cachedSnapshot,
+              clock().timeIntervalSince(cachedAt) < Self.cacheTTL else {
+            return nil
+        }
+        return cachedSnapshot
+    }
+
+    private func storeCache(_ snapshot: UsageSnapshot, groupErrors: [String: String]) {
+        lock.lock()
+        defer { lock.unlock() }
         cachedAt = clock()
         cachedSnapshot = snapshot
         lastGroupErrors = groupErrors
-        lock.unlock()
-        return snapshot
     }
 
     /// Cache window — llm-router's own freshest source refreshes every ~120 s;
