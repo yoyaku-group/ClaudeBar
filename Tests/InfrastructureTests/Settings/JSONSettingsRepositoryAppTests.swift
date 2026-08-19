@@ -218,11 +218,13 @@ struct JSONSettingsRepositoryAppTests {
     // MARK: - Overview
 
     @Test
-    func `overviewModeEnabled defaults to false`() {
+    func `overviewModeEnabled defaults to true`() {
         let (repo, dir) = makeRepository()
         defer { cleanup(dir) }
 
-        #expect(repo.overviewModeEnabled() == false)
+        // Comprehension-first dashboard is the default since 2026-08-18;
+        // an explicit stored value still wins.
+        #expect(repo.overviewModeEnabled() == true)
     }
 
     @Test

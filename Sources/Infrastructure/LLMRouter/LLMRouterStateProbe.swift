@@ -137,7 +137,9 @@ public final class LLMRouterStateProbe: UsageProbe, GroupErrorReporting, @unchec
 
     static func parse(_ data: Data, skipSlugs: Set<String> = []) throws -> (UsageSnapshot, [String: String]) {
         let decoded = try JSONDecoder().decode([String: ProviderStatus].self, from: data)
-        let iso8601 = ISO8601DateFormatter()
+        // The format style (unlike plain ISO8601DateFormatter) accepts both
+        // "Z" and "+00:00" offsets — llm-router emits the latter.
+        let iso8601 = Date.ISO8601FormatStyle()
 
         var quotas: [UsageQuota] = []
         var groupErrors: [String: String] = [:]
@@ -146,7 +148,7 @@ public final class LLMRouterStateProbe: UsageProbe, GroupErrorReporting, @unchec
             if let windows = status.windows, !windows.isEmpty {
                 for window in windows {
                     let pct = window.remainingPct ?? 0
-                    let resetsAt = window.resetsAt.flatMap { iso8601.date(from: $0) }
+                    let resetsAt = window.resetsAt.flatMap { try? iso8601.parse($0) }
                     let quotaType = quotaType(forKind: window.kind)
                     quotas.append(UsageQuota(
                         percentRemaining: pct,
