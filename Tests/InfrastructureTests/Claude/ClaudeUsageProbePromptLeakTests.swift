@@ -171,7 +171,7 @@ struct ClaudeUsageProbePromptLeakTests {
     }
 
     @Test("parse succeeds on healthy table and yields whitelisted resetText")
-    func parseSucceedsOnHealthyTableAndYieldsWhitelistedResettext() {
+    func parseSucceedsOnHealthyTableAndYieldsWhitelistedResettext() throws {
         let snapshot = try ClaudeUsageProbe.parse(Self.healthyUsageOutput)
         #expect(snapshot.quotas.count == 2)
         let session = snapshot.quotas.first { $0.quotaType == .session }
