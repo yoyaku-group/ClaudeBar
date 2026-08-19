@@ -60,6 +60,10 @@ struct ClaudeBarApp: App {
         // Seed known Yoyaku Claude profiles so each isolated config directory
         // (e.g. ~/.claude, ~/.claude-admin) appears as a separate account.
         ClaudeBarApp.seedClaudeAccountsIfNeeded(settingsRepository: settingsRepository)
+        // Backfill email on accounts that were seeded before the resolver
+        // was wired (Ben 2026-08-19: dashboard couldn't tell which Claude
+        // account was at 0% because the email was missing).
+        ClaudeBarApp.backfillClaudeAccountEmailsIfNeeded(settingsRepository: settingsRepository)
 
         // Create all providers with their probes (rich domain models)
         // Each provider manages its own isEnabled state (persisted via ProviderSettingsRepository)
@@ -295,11 +299,13 @@ struct ClaudeBarApp: App {
         // Default config at ~/.claude.json (CLAUDE_CONFIG_DIR unset).
         let defaultJson = (home as NSString).appendingPathComponent(".claude.json")
         if fm.fileExists(atPath: defaultJson) {
+            let resolver = ClaudeAccountInfoResolver(configURL: URL(fileURLWithPath: defaultJson))
+            let email = resolver.resolve()?.email
             candidates.append((
                 accountId: "default",
                 label: "Default",
                 configDir: home,
-                email: nil
+                email: email
             ))
         }
 
@@ -309,12 +315,14 @@ struct ClaudeBarApp: App {
                 let configDir = (home as NSString).appendingPathComponent(item)
                 let jsonPath = (configDir as NSString).appendingPathComponent(".claude.json")
                 guard fm.fileExists(atPath: jsonPath) else { continue }
+                let resolver = ClaudeAccountInfoResolver(configURL: URL(fileURLWithPath: jsonPath))
+                let email = resolver.resolve()?.email
                 let accountId = item.replacingOccurrences(of: ".claude-", with: "")
                 candidates.append((
                     accountId: accountId,
                     label: accountId.capitalized,
                     configDir: configDir,
-                    email: nil
+                    email: email
                 ))
             }
         }
@@ -330,6 +338,34 @@ struct ClaudeBarApp: App {
                     label: candidate.label,
                     email: candidate.email,
                     probeConfig: ["claudeConfigDir": candidate.configDir]
+                ),
+                forProvider: "claude"
+            )
+        }
+    }
+
+    /// Backfills the `email` field on existing Claude accounts that were
+    /// seeded before the resolver was wired. Runs unconditionally on
+    /// every startup — cheap (one file read per account) and idempotent.
+    /// Skips accounts that already have an email. Resolves via
+    /// `ClaudeAccountInfoResolver` against `<configDir>/.claude.json`
+    /// (or `~/.claude.json` for the default account where configDir == HOME).
+    /// Ben 2026-08-19: needed to tell which Claude account was at 0%.
+    static func backfillClaudeAccountEmailsIfNeeded(settingsRepository: any MultiAccountSettingsRepository) {
+        for config in settingsRepository.accounts(forProvider: "claude") {
+            guard config.email == nil else { continue }
+            guard let configDir = config.probeConfig["claudeConfigDir"] else { continue }
+            let jsonPath = (configDir as NSString).appendingPathComponent(".claude.json")
+            guard FileManager.default.fileExists(atPath: jsonPath) else { continue }
+            let resolver = ClaudeAccountInfoResolver(configURL: URL(fileURLWithPath: jsonPath))
+            guard let email = resolver.resolve()?.email else { continue }
+            settingsRepository.updateAccount(
+                ProviderAccountConfig(
+                    accountId: config.accountId,
+                    label: config.label,
+                    email: email,
+                    organization: config.organization,
+                    probeConfig: config.probeConfig
                 ),
                 forProvider: "claude"
             )
