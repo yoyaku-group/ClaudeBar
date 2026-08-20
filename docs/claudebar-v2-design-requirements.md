@@ -47,24 +47,91 @@ Header label = worst window filtered (matches existing semantic).
 Phase 1 commit : `0a8b0a5` (row-level), `8a324c7` (menu-bar NSImage
 renderer for the stacked glyph).
 
-## R3 — Multi-account email display for Claude
+## R3 — Multi-account rows per provider (Claude = 2 rows for Ben)
 
-Ben has **2 Claude accounts** (e.g. `webmaster@yoyaku.fr` + `tech@yoyaku.fr`
-or `benjamin@chapelle14.com`). The popup must show BOTH emails visibly so
-Ben knows which account is at 0%.
+Ben has **2 Claude accounts** (`webmaster@yoyaku.fr` + `tech@yoyaku.fr`,
+possibly also `benjamin@chapelle14.com`). The popup must show **one row
+per account**, not one row with email sub-line.
 
-Surfaces :
-- Popup row : 3-line layout (provider / label / email monospaced).
-  Email truncation mode = `.middle` (preserve first + last chars).
-- Tooltip on menu-bar icon : prepend `email + " — " + label` text.
-  Glyph itself unchanged (cat + percent stays compact — chat + % remain
-  the primary identifier).
-- Source : `ClaudeAccountInfoResolver` (`Sources/Infrastructure/...`)
-  backed by `backfillClaudeAccountEmailsIfNeeded` (one-shot seeder).
-- Model : `ProviderSnapshot.accountEmail: String?` (only populated when
-  `multi.accounts.count > 1`).
+Why rows are duplicated (not single-row-with-email) :
+- Per-account quota data is genuinely different (different plan,
+  different reset windows).
+- Visual disambiguation is faster with separate rows than scanning
+  email text under a single label.
 
-Phase 1.5 commits : `637c3a5`, `23cc80c`, `4c750f1`, `67cb4e3`.
+### Two popup modes — both must honor R3
+
+ClaudeBar popup has **two display modes** (toggle via
+`settings.overviewModeEnabled`) :
+
+1. **Overview mode** ("ce qu'il me reste") : `OverviewDashboardView`
+   shows ALL providers × ALL accounts as rows.
+   - `OverviewBuilder.swift:18` iterates `multi.accounts` and emits
+     one `ProviderSnapshot` per account with `accountLabel` +
+     `accountEmail`.
+   - **For 2 Claude accounts → 2 Claude rows** ✅ (this works in the
+     pushed build).
+   - User reaches overview mode by clicking "Dashboard" button in the
+     provider-mode header (MenuContentView.swift:101).
+
+2. **Provider mode** (the screenshot Ben took) : `MenuContentView`
+   shows ONE selected provider with a top tab strip to switch providers
+   (Claude / Codex / Z.ai / Amp).
+   - **Current code limitation** : `selectedProvider.snapshot` returns
+     the AGGREGATED snapshot, NOT per-account. The tab strip iterates
+     providers (one tab per provider), not accounts.
+   - **Sub-tab design desired by Ben** : the Claude tab should itself
+     contain N sub-tabs (`Claude (tech@)` / `Claude (webmaster@)`).
+     **NOT YET IMPLEMENTED**. Implementation deferred until Phase 8
+     (single-icon centralization) — when the popup layout is redesigned
+     for the single-icon mode anyway, sub-tabs per provider fold in
+     naturally.
+   - Until Phase 8 : provider mode shows Claude as ONE entry with the
+     ACTIVE account's snapshot. To see the 2nd account, switch to
+     Overview mode.
+
+### Each row layout (both modes)
+
+- Icon (SF Symbol from `ProviderVisualIdentityLookup`) + provider label
+  + account label (`Default` / `Admin`) + account email (monospaced,
+  truncation mode `.middle`) + 2 stacked quota bars (R2) + reset
+  countdowns.
+
+### Tooltip on menu-bar icon (single-icon mode, post-Phase 8)
+
+When multi-account, render the glyph with the WORST-quota account's
+percent + inline email suffix (e.g. `5h 0% | 7d 41% · tech@`). Today
+the tooltip prepends `email + " — " + label` (Phase 7c) — keep that
+during the pre-Phase-8 transition.
+
+### Implementation contract
+
+- `ClaudeProvider` already conforms to `MultiAccountProvider` protocol
+  with `accounts: [ProviderAccount]` + `accountSnapshots: [String: UsageSnapshot]`
+  (line 56 + line 66 of `Sources/Domain/Provider/Claude/ClaudeProvider.swift`).
+- `OverviewBuilder.swift:18` already iterates `multi.accounts` and emits
+  one `ProviderSnapshot` per account with `accountLabel` + `accountEmail`.
+- `ProviderSnapshot` model already has `accountLabel: String?` +
+  `accountEmail: String?` fields (lines 124-128 of `OverviewModels.swift`).
+- `MenuContentView.swift:38-39` reads `monitor.selectedProvider` (singular
+  provider, aggregated snapshot). **Sub-tab implementation needed for
+  Phase 8** : iterate `multi.accounts` and emit a `selectedAccountId`
+  state, render sub-tabs within the provider header.
+
+### Account enumeration depends on `claude auth list`
+
+Verify with `claude auth list` in terminal how many accounts Claude CLI
+exposes. If CLI exposes 1 account only, fallback shows 1 row.
+
+Phase 1.5 commits (multi-account infrastructure already shipped) :
+`637c3a5` (ClaudeAccountInfoResolver wired), `23cc80c` (`accountEmail`
+field), `4c750f1` (monospaced email render), `67cb4e3` (tooltip prepend).
+Old build `06a3939` predates these — visible regression vs new build.
+
+If `Claude CLI auth list` returns 1 account only, the popup still shows
+1 row but the row is now email-disambiguated. Future fix : add a
+multi-account login flow in `ClaudeProvider` to detect/seed accounts
+not yet in CLI's `auth list`.
 
 ## R4 — SF Symbols / polished glyphs (no red dots)
 
