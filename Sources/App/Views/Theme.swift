@@ -791,26 +791,6 @@ extension AppTheme {
         }
     }
 
-    /// Get provider SF symbol icon by ID
-    static func providerSymbolIcon(for providerId: String) -> String {
-        switch providerId {
-        case "claude": return "brain.fill"
-        case "codex": return "chevron.left.forwardslash.chevron.right"
-        case "gemini": return "sparkles"
-        case "copilot": return "chevron.left.forwardslash.chevron.right"
-        case "antigravity": return "wand.and.stars"
-        case "zai": return "z.square.fill"
-        case "bedrock": return "cloud.fill" // AWS cloud icon
-        case "minimax": return "waveform"
-        case "deepseek": return "d.square.fill"
-        case "alibaba": return "cloud.fill"
-        case "opencode-go": return "square.stack.3d.up.fill"
-        case "omp": return "terminal.fill"
-        case "grok": return "line.diagonal"
-        case "vercel-gateway": return "triangle.fill"
-        default: return "questionmark.circle.fill"
-        }
-    }
 }
 
 // MARK: - Status Theme Colors (Adaptive)
