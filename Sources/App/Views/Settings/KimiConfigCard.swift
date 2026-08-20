@@ -10,7 +10,7 @@ struct KimiConfigCard: View {
     @Environment(\.appTheme) private var theme
 
     @State private var kimiConfigExpanded: Bool = false
-    @State private var kimiProbeMode: KimiProbeMode = .cli
+    @State private var kimiProbeMode: KimiProbeMode = .api
 
     var body: some View {
         DisclosureGroup(isExpanded: $kimiConfigExpanded) {

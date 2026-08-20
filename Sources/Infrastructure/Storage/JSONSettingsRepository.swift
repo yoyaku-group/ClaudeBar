@@ -304,7 +304,7 @@ public final class JSONSettingsRepository:
     public func kimiProbeMode() -> KimiProbeMode {
         guard let raw: String = store.read(key: "kimi.probeMode"),
               let mode = KimiProbeMode(rawValue: raw) else {
-            return .cli
+            return .api
         }
         return mode
     }

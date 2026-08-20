@@ -47,7 +47,7 @@ public final class KimiProvider: AIProvider {
             if let kimiSettings = settingsRepository as? KimiSettingsRepository {
                 return kimiSettings.kimiProbeMode()
             }
-            return .cli
+            return .api
         }
         set {
             if let kimiSettings = settingsRepository as? KimiSettingsRepository {
