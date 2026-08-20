@@ -254,7 +254,7 @@ public final class QuotaMonitor {
         burnRateWarningEnabled: Bool = false,
         burnRateThreshold: Double = 1.5
     ) -> MenuBarLabel? {
-        func segment(forQuotaKey quotaKey: String) -> (text: String, status: QuotaStatus)? {
+        func segment(forQuotaKey quotaKey: String) -> (text: String, status: QuotaStatus, percentRemaining: Double?)? {
             let percentage = showPercentage
                 ? menuBarPercentageDisplay(
                     providerId: providerId,
@@ -272,14 +272,18 @@ public final class QuotaMonitor {
                     burnRateThreshold: burnRateThreshold
                 )
                 : nil
+            // Pull the raw percent from the snapshot so progress-bar renderers
+            // (Phase 7 dual-bar) have a number to draw — independent of the
+            // percentage display setting above (which only affects the text).
+            let percentRemaining: Double? = quota(providerId: providerId, quotaKey: quotaKey)?.percentRemaining
 
             switch (percentage, duration) {
             case let (.some(percentage), .some(duration)):
-                return ("\(percentage.text) · \(duration.text)", percentage.status)
+                return ("\(percentage.text) · \(duration.text)", percentage.status, percentRemaining)
             case let (.some(percentage), .none):
-                return (percentage.text, percentage.status)
+                return (percentage.text, percentage.status, percentRemaining)
             case let (.none, .some(duration)):
-                return (duration.text, duration.status)
+                return (duration.text, duration.status, percentRemaining)
             case (.none, .none):
                 return nil
             }
@@ -304,16 +308,18 @@ public final class QuotaMonitor {
             let primaryLabel = windowPrefix(forQuotaKey: primaryQuotaKey)
             let secondaryLabel = windowPrefix(forQuotaKey: secondaryQuotaKey)
             // Each window becomes its own segment (prefixed text + that
-            // window's status) so stacked rendering can draw and tint them
-            // independently; the joined text stays the canonical single-line
-            // form and doubles as the tooltip.
+            // window's status + raw percent) so stacked rendering can draw
+            // and tint them independently; the joined text stays the canonical
+            // single-line form and doubles as the tooltip.
             let primarySegment = MenuBarLabel.Segment(
                 text: "\(primaryLabel) \(primary.text)",
-                status: primary.status
+                status: primary.status,
+                percentRemaining: primary.percentRemaining
             )
             let secondarySegment = MenuBarLabel.Segment(
                 text: "\(secondaryLabel) \(secondary.text)",
-                status: secondary.status
+                status: secondary.status,
+                percentRemaining: secondary.percentRemaining
             )
             return MenuBarLabel(
                 text: "\(primarySegment.text) | \(secondarySegment.text)",

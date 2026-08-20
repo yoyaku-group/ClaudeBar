@@ -17,10 +17,16 @@ public struct MenuBarLabel: Sendable, Equatable {
     public struct Segment: Sendable, Equatable {
         public let text: String
         public let status: QuotaStatus
+        /// The window's raw remaining percent (0-100). Optional because the
+        /// percentage display setting may be off (the segment still has status
+        /// but no number to feed a progress bar). The dual-bar renderer
+        /// requires this to be non-nil.
+        public let percentRemaining: Double?
 
-        public init(text: String, status: QuotaStatus) {
+        public init(text: String, status: QuotaStatus, percentRemaining: Double? = nil) {
             self.text = text
             self.status = status
+            self.percentRemaining = percentRemaining
         }
     }
 

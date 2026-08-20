@@ -92,6 +92,11 @@ final class StatusItemLabelDriver {
         /// Ben can identify which Claude profile is logged in at a glance —
         /// the menu-bar glyph itself doesn't carry it (cat + percentage only).
         var accountEmail: String?
+        /// Compact suffix of the multi-account email rendered inline in the
+        /// dual-bar path (e.g. "ben@") — derived from `accountEmail`. nil when
+        /// no disambiguation is needed (single-account provider, or cat mode
+        /// active which doesn't render the badge at all).
+        var inlineEmailSuffix: String?
     }
 
     /// Attaches to the `NSStatusItem` exposed by MenuBarExtraAccess and starts
@@ -181,8 +186,26 @@ final class StatusItemLabelDriver {
             glyphMode: settings.menuBarGlyphMode,
             catFrame: catFrameIndex,
             catHealthPercent: worstEnabledPercent,
-            accountEmail: accountEmail
+            accountEmail: accountEmail,
+            inlineEmailSuffix: accountEmail.flatMap { Self.compactEmailSuffix(from: $0) }
         )
+    }
+
+    /// Builds the compact inline email suffix used by the dual-bar renderer.
+    /// Strategy: keep the local-part (everything before "@") + the first
+    /// letter of the domain. Examples:
+    ///   - "webmaster@yoyaku.fr"        → "webmaster@y"
+    ///   - "tech@yoyaku.fr"             → "tech@y"
+    ///   - "benjamin.belaga@gmail.com"  → "benjamin.belaga@g"
+    /// This keeps the badge readable in 9pt without overflowing the menu-bar
+    /// width — full emails live in the tooltip + dashboard row.
+    private static func compactEmailSuffix(from email: String) -> String? {
+        let parts = email.split(separator: "@", maxSplits: 1, omittingEmptySubsequences: false)
+        guard parts.count == 2, !parts[0].isEmpty else { return nil }
+        let local = String(parts[0])
+        let domainFirst = parts[1].first.map { String($0) } ?? ""
+        guard !domainFirst.isEmpty else { return nil }
+        return "\(local)@\(domainFirst)"
     }
 
     /// Worst percentage remaining across every enabled provider's windows —
@@ -278,12 +301,26 @@ final class StatusItemLabelDriver {
         }
 
         if content.glyphMode.showsText, let label = content.label {
-            // Stacked mode only applies to a dual-window label: two windows
-            // become two smaller lines (halving the width the label needs).
-            // Anything else, including a dual label with stacking off, keeps
-            // the classic single-line rendering. The tooltip always stays the
-            // full joined text, so no information is lost either way.
-            if content.stacked, label.segments.count == 2 {
+            // Dual-bar path takes priority over stacked text when both windows
+            // exist, the percent values are present, AND an inline email
+            // suffix is available — that's the "see your 2 quota windows +
+            // which Claude profile at a single glance" ask. Without a suffix
+            // (single-account provider, no email recorded) or without percent
+            // (percentage display off, dollar-based quota, no data yet), fall
+            // back to the stacked text renderer so the menu bar still works.
+            if content.stacked,
+               label.segments.count == 2,
+               let suffix = content.inlineEmailSuffix,
+               let topPct = label.segments[0].percentRemaining,
+               let bottomPct = label.segments[1].percentRemaining {
+                parts.append(StatusBarDualBarImageRenderer.image(
+                    top: (topPct, theme.statusColor(for: label.segments[0].status)),
+                    bottom: (bottomPct, theme.statusColor(for: label.segments[1].status)),
+                    track: theme.progressTrack,
+                    emailSuffix: suffix,
+                    emailSuffixColor: theme.textTertiary
+                ))
+            } else if content.stacked, label.segments.count == 2 {
                 parts.append(StatusBarStackedImageRenderer.image(
                     top: (label.segments[0].text, theme.statusColor(for: label.segments[0].status)),
                     bottom: (label.segments[1].text, theme.statusColor(for: label.segments[1].status)),
@@ -713,6 +750,105 @@ enum StatusBarStackedImageRenderer {
     /// negative). Null for a line with no ink, e.g. all whitespace.
     private static func inkBounds(of line: NSAttributedString) -> CGRect {
         CTLineGetBoundsWithOptions(CTLineCreateWithAttributedString(line), [.useGlyphPathBounds])
+    }
+}
+
+/// Renders the dual-window label as **two stacked horizontal progress bars** instead
+/// of two stacked text lines. The bars give Ben a visual "scan in 2 seconds" cue for
+/// "what I have for the session" vs "what I have for the week" without opening the
+/// dropdown (Phase 7 — the `Ben en deux secondes` ask).
+///
+/// Constraints:
+/// - Menu-bar item is 22pt tall (`StatusBarStackedImageRenderer.maxHeight`).
+/// - Two 4pt bars + 1pt spacing = 9pt total, well under the cap.
+/// - Bars are 60pt wide each, both left-aligned (matching the stacked text layout).
+/// - Percent fill is rounded to integer pixels (no sub-pixel artifacts at 1x).
+/// - Track + fill colors are theme-aware: track = `theme.progressTrack`, fill = the
+///   per-window `statusColor` (the same color the stacked text would have used).
+enum StatusBarDualBarImageRenderer {
+    /// Width of each individual bar.
+    private static let barWidth: CGFloat = 60
+    /// Height of each individual bar.
+    private static let barHeight: CGFloat = 4
+    /// Vertical breathing room between the two bars.
+    private static let barSpacing: CGFloat = 1
+
+    @MainActor
+    static func image(
+        top: (percent: Double, color: Color),
+        bottom: (percent: Double, color: Color),
+        track: Color,
+        emailSuffix: String? = nil,
+        emailSuffixColor: Color = .secondary
+    ) -> NSImage {
+        let totalHeight = barHeight * 2 + barSpacing
+        let baseWidth = barWidth
+
+        // Pre-measure the email-suffix text to compute final image width.
+        // Use a small font so the badge never overwhelms the bars visually.
+        let suffixFont = NSFont.monospacedSystemFont(ofSize: 9, weight: .regular)
+        let suffixAttributes: [NSAttributedString.Key: Any] = [
+            .font: suffixFont,
+            .foregroundColor: NSColor(emailSuffixColor),
+        ]
+        let suffixAttributed = emailSuffix.map { NSAttributedString(string: $0, attributes: suffixAttributes) }
+        let suffixSize = suffixAttributed?.size() ?? .zero
+        let suffixSpacing: CGFloat = emailSuffix != nil ? 4 : 0
+        let totalWidth = baseWidth + (suffixSize.width > 0 ? suffixSize.width + suffixSpacing : 0)
+        let imageSize = NSSize(width: totalWidth, height: totalHeight)
+        let image = NSImage(size: imageSize, flipped: false) { _ in
+            // Top bar — flipped: false so y grows upward; top bar sits at the top edge.
+            drawBar(
+                at: NSPoint(x: 0, y: barHeight + barSpacing),
+                percent: top.percent,
+                color: NSColor(top.color),
+                track: NSColor(track)
+            )
+            // Bottom bar — at y = 0.
+            drawBar(
+                at: NSPoint(x: 0, y: 0),
+                percent: bottom.percent,
+                color: NSColor(bottom.color),
+                track: NSColor(track)
+            )
+            // Email suffix badge — drawn after the bars, vertically centered
+            // on the bar stack so it sits visually next to the bottom bar.
+            if let suffixAttributed {
+                let xOffset = baseWidth + suffixSpacing
+                let yOffset = (totalHeight - suffixSize.height) / 2
+                suffixAttributed.draw(at: NSPoint(x: xOffset, y: yOffset))
+            }
+            return true
+        }
+        image.isTemplate = false
+        return image
+    }
+
+    /// Draws a single rounded-rect track + a rounded-rect fill clipped to the
+    /// remaining percent. The corner radius matches half the bar height so the
+    /// ends render as proper pills rather than squared-off boxes.
+    private static func drawBar(at origin: NSPoint, percent: Double, color: NSColor, track: NSColor) {
+        let trackRect = NSRect(
+            x: origin.x,
+            y: origin.y,
+            width: barWidth,
+            height: barHeight
+        )
+        let trackPath = NSBezierPath(roundedRect: trackRect, xRadius: barHeight / 2, yRadius: barHeight / 2)
+        track.setFill()
+        trackPath.fill()
+
+        let clamped = min(max(percent, 0), 100) / 100
+        let fillWidth = max(barHeight, ceil(CGFloat(clamped) * barWidth))
+        let fillRect = NSRect(
+            x: origin.x,
+            y: origin.y,
+            width: fillWidth,
+            height: barHeight
+        )
+        let fillPath = NSBezierPath(roundedRect: fillRect, xRadius: barHeight / 2, yRadius: barHeight / 2)
+        color.setFill()
+        fillPath.fill()
     }
 }
 
