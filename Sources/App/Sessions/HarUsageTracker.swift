@@ -20,7 +20,7 @@ public final class HarUsageTracker {
     public private(set) var liveCodex: Int?
     public private(set) var counts24h: HarTranscriptCounter.Counts?
     public private(set) var countsAt: Date?
-    public private(set) var guardian: GuardianStateReader.State?
+    public private(set) var guardian: GuardianSnapshot?
 
     // MARK: - Plumbing
 

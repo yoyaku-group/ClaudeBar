@@ -9,6 +9,10 @@ import Domain
 /// writer; this reader only consumes. A snapshot older than the staleness
 /// gate renders as a warning state, never green (plugin-parity rule: a mute
 /// daemon must not look healthy).
+///
+/// The reader is an **adapter**: it decodes the on-disk JSON into the domain
+/// model `GuardianSnapshot` (defined in `Sources/Domain/Provider/Guardian/`),
+/// so consumers can import `Domain` alone and stay decoupled from this file.
 public enum GuardianStateReader {
 
     public static let stateURL = URL(fileURLWithPath:
@@ -18,68 +22,24 @@ public enum GuardianStateReader {
     /// Plugin-parity staleness gate (the SwiftBar plugin used 180 s).
     public static let stalenessLimit: TimeInterval = 180
 
-    public struct State: Sendable, Equatable {
-        public let status: String            // green | yellow | red | blind
-        public let capturedAt: Date
-        public let metrics: Metrics
-        public let findings: [Finding]
-        /// True when `capturedAt` is older than the staleness gate — the UI
-        /// shows "muet (Nmin)" and never green.
-        public let isStale: Bool
-
-        public struct Metrics: Sendable, Equatable, Decodable {
-            public let swapUsedPct: Double?
-            public let ramFreePct: Double?
-            public let load1: Double?
-            public let load1PerCore: Double?
-            public let runnable: Int?
-            public let zombies: Int?
-            public let liveClaude: Int?
-            public let liveCodex: Int?
-            public let limited: Int?
-
-            enum CodingKeys: String, CodingKey {
-                case swapUsedPct = "swap_used_pct"
-                case ramFreePct = "ram_free_pct"
-                case load1, load1PerCore = "load1_per_core"
-                case runnable, zombies
-                case liveClaude = "live_claude"
-                case liveCodex = "live_codex"
-                case limited
-            }
-        }
-
-        public struct Finding: Sendable, Equatable, Decodable {
-            public let rule: String
-            public let severity: String
-            public let message: String
-            public let autoDone: Bool
-
-            enum CodingKeys: String, CodingKey {
-                case rule, severity, message
-                case autoDone = "auto_done"
-            }
-        }
-    }
-
     /// Reads and validates the snapshot. Returns nil when unreadable.
-    public static func read(now: Date = Date()) -> State? {
+    public static func read(now: Date = Date()) -> GuardianSnapshot? {
         guard let data = try? Data(contentsOf: stateURL) else { return nil }
         return decode(data, now: now)
     }
 
-    public static func decode(_ data: Data, now: Date = Date()) -> State? {
+    public static func decode(_ data: Data, now: Date = Date()) -> GuardianSnapshot? {
         struct Payload: Decodable {
             let ts: Double
             let status: String
-            let metrics: State.Metrics
-            let findings: [State.Finding]?
+            let metrics: GuardianSnapshot.Metrics
+            let findings: [GuardianSnapshot.Finding]?
         }
         guard let payload = try? JSONDecoder().decode(Payload.self, from: data) else {
             return nil
         }
         let capturedAt = Date(timeIntervalSince1970: payload.ts)
-        return State(
+        return GuardianSnapshot(
             status: payload.status,
             capturedAt: capturedAt,
             metrics: payload.metrics,

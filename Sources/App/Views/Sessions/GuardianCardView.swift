@@ -1,6 +1,5 @@
 import SwiftUI
 import Domain
-import Infrastructure
 
 /// Machine-health card absorbing the SwiftBar `guardian.10s.sh` dots:
 /// status, key metrics, findings, and the daemon's non-interactive actions.
@@ -10,7 +9,7 @@ struct GuardianCardView: View {
 
     @Environment(\.appTheme) private var theme
 
-    private var state: GuardianStateReader.State? { tracker.guardian }
+    private var state: GuardianSnapshot? { tracker.guardian }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -77,7 +76,7 @@ struct GuardianCardView: View {
         }
     }
 
-    private func headerBadge(_ state: GuardianStateReader.State) -> String {
+    private func headerBadge(_ state: GuardianSnapshot) -> String {
         if state.isStale {
             let minutes = Int(Date().timeIntervalSince(state.capturedAt) / 60)
             return "muet (\(minutes)min)"
@@ -85,7 +84,7 @@ struct GuardianCardView: View {
         return state.status
     }
 
-    private func metricsGrid(_ state: GuardianStateReader.State) -> some View {
+    private func metricsGrid(_ state: GuardianSnapshot) -> some View {
         let m = state.metrics
         return HStack(spacing: 0) {
             metricCell("swap", value: m.swapUsedPct.map { String(format: "%.0f%%", $0) })
