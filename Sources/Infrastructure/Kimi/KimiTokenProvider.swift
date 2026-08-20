@@ -31,7 +31,16 @@ public struct KimiCookieTokenProvider: KimiTokenProviding {
             return browserToken
         }
 
-        AppLog.probes.error("Kimi: No authentication token found")
+        // Diagnostic: surface both missing-source conditions to help the user
+        // unblock. ProbeError.authenticationRequired carries no hint about WHICH
+        // source was checked and failed.
+        let envPresent = ProcessInfo.processInfo.environment["KIMI_AUTH_TOKEN"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        AppLog.probes.error(
+            "Kimi: No authentication token found — env=\(envPresent ? "present-but-empty" : "missing"), " +
+            "cookie kimi-auth absent from browser stores (www.kimi.com, kimi.com). " +
+            "Set KIMI_AUTH_TOKEN env or log into kimi.com in a browser to populate the cookie."
+        )
         throw ProbeError.authenticationRequired
     }
 
