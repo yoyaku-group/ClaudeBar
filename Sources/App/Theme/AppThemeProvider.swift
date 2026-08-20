@@ -135,6 +135,12 @@ public protocol AppThemeProvider {
     /// Returns the appropriate status color for a given quota status
     func statusColor(for status: QuotaStatus) -> Color
 
+    /// Returns the appropriate SF Symbol icon for a given quota status.
+    /// Used as the fallback glyph when `statusBarIconName` is nil and the
+    /// menu-bar pixel needs a status-aware symbol (chat glyph not active).
+    /// Themes can override to ship their own icon set (ANSI, ASCII, emoji, etc).
+    func statusIcon(for status: QuotaStatus) -> String
+
     /// Returns the appropriate progress gradient for a given percentage
     func progressGradient(for percent: Double) -> LinearGradient
 }
@@ -161,6 +167,18 @@ public extension AppThemeProvider {
         case .warning: statusWarning
         case .critical: statusCritical
         case .depleted: statusDepleted
+        }
+    }
+
+    /// Default status icon mapping (Apple SF Symbols).
+    /// Mirrors the previous hardcoded `fallbackIconName(for:)` in
+    /// `StatusItemLabelDriver.swift` so behavior is preserved when no
+    /// theme overrides this.
+    func statusIcon(for status: QuotaStatus) -> String {
+        switch status {
+        case .depleted: "chart.bar.xaxis"
+        case .critical: "exclamationmark.triangle.fill"
+        case .warning, .healthy: "chart.bar.fill"
         }
     }
 

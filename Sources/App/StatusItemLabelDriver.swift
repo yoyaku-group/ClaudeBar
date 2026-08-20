@@ -298,7 +298,7 @@ final class StatusItemLabelDriver {
                 ))
             }
         } else if !content.glyphMode.showsCat {
-            let symbolName = theme.statusBarIconName ?? fallbackIconName(for: content.fallbackStatus)
+            let symbolName = theme.statusBarIconName ?? theme.statusIcon(for: content.fallbackStatus)
             parts.append(symbolImage(
                 symbolName,
                 color: NSColor(theme.statusColor(for: content.fallbackStatus))
@@ -339,13 +339,8 @@ final class StatusItemLabelDriver {
         )
     }
 
-    private static func fallbackIconName(for status: QuotaStatus) -> String {
-        switch status {
-        case .depleted: "chart.bar.xaxis"
-        case .critical: "exclamationmark.triangle.fill"
-        case .warning, .healthy: "chart.bar.fill"
-        }
-    }
+    // MARK: - (removed fallbackIconName — superseded by theme.statusIcon(for:) in AppThemeProvider)
+
 
     /// Renders an SF Symbol tinted with a fixed color, since the status item
     /// image is non-template (theme colors must survive menu bar appearance).

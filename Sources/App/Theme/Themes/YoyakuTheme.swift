@@ -137,6 +137,21 @@ public struct YoyakuTheme: AppThemeProvider {
         )
     }
 
+    // MARK: - Status Icons (ANSI-flavored SF Symbols)
+
+    /// YoyakuTheme overrides the default status icons with an ANSI-styled set:
+    /// filled circles for healthy, triangles for warning, octagons for
+    /// critical/depleted. The geometry reads as "low → high alert" on a
+    /// terminal aesthetic, matching the ANSI color palette above.
+    public func statusIcon(for status: QuotaStatus) -> String {
+        switch status {
+        case .healthy: "circle.fill"
+        case .warning: "triangle.fill"
+        case .critical: "exclamationmark.triangle.fill"
+        case .depleted: "xmark.octagon.fill"
+        }
+    }
+
     // MARK: - Initializer
 
     public init() {}
