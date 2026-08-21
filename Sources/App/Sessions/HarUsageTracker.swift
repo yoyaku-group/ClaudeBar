@@ -29,10 +29,10 @@ public final class HarUsageTracker {
     /// Transcript scans happen at most every 5 minutes (they walk four
     /// directory trees; the guardian tail is a single file read).
     private static let scanInterval: TimeInterval = 300
-    private static let activityFileURL = URL(fileURLWithPath:
+    nonisolated private static let activityFileURL = URL(fileURLWithPath:
         (("~/.claudebar/har-activity.jsonl" as NSString).expandingTildeInPath as String)
     )
-    private static let rotationBytes = 2_000_000
+    nonisolated private static let rotationBytes = 2_000_000
 
     public init() {}
 
@@ -69,11 +69,11 @@ public final class HarUsageTracker {
         let capturedAt = now
         Task.detached(priority: .utility) { [weak self] in
             let counts = HarTranscriptCounter.countActive(now: capturedAt)
+            Self.appendObservation(counts: counts, at: capturedAt)
             await MainActor.run {
                 guard let self else { return }
                 self.counts24h = counts
                 self.countsAt = capturedAt
-                Self.appendObservation(counts: counts, at: capturedAt)
             }
         }
     }

@@ -108,15 +108,17 @@ struct ClaudeBarApp: App {
             // concern — the skipSlugs entry alone fixes the duplicate today.
             LLMRouterProvider(
                 probe: LLMRouterStateProbe(
-                    skipSlugs: [
-                        ("glm_pro", "zai"),
-                        ("minimax_max", "minimax"),
-                        ("kimi", "kimi"),
-                        ("bedrock", "bedrock"),
-                        ("qwen_personal_pro", "alibaba"),
-                    ]
-                    .filter { settingsRepository.isEnabled(forProvider: $0.1, defaultValue: true) }
-                    .map(\.0)
+                    skipSlugs: Set(
+                        [
+                            ("glm_pro", "zai"),
+                            ("minimax_max", "minimax"),
+                            ("kimi", "kimi"),
+                            ("bedrock", "bedrock"),
+                            ("qwen_personal_pro", "alibaba"),
+                        ]
+                        .filter { settingsRepository.isEnabled(forProvider: $0.1, defaultValue: true) }
+                        .map(\.0)
+                    )
                 ),
                 settingsRepository: settingsRepository
             ),
