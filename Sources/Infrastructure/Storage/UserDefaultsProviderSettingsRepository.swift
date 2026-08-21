@@ -244,9 +244,9 @@ public final class UserDefaultsProviderSettingsRepository: ZaiSettingsRepository
 
     public func kimiProbeMode() -> KimiProbeMode {
         guard let rawValue = userDefaults.string(forKey: Keys.kimiProbeMode) else {
-            return .cli // Default to CLI mode
+            return .api // Default to API mode (CLI /usage is dead since kimi-code 0.37.1)
         }
-        return KimiProbeMode(rawValue: rawValue) ?? .cli
+        return KimiProbeMode(rawValue: rawValue) ?? .api
     }
 
     public func setKimiProbeMode(_ mode: KimiProbeMode) {

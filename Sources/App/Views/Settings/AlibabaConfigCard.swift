@@ -80,17 +80,17 @@ struct AlibabaConfigCard: View {
                     .frame(width: 32, height: 32)
 
                 Image(systemName: "cloud.fill")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(theme.font(size: 12, weight: .bold))
                     .foregroundStyle(.white)
             }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("Alibaba Configuration")
-                    .font(.system(size: 14, weight: .bold, design: theme.fontDesign))
+                    .font(theme.font(size: 14, weight: .bold))
                     .foregroundStyle(theme.textPrimary)
 
                 Text("Coding Plan quota tracking")
-                    .font(.system(size: 10, weight: .medium, design: theme.fontDesign))
+                    .font(theme.font(size: 10, weight: .medium))
                     .foregroundStyle(theme.textTertiary)
             }
 
@@ -103,7 +103,7 @@ struct AlibabaConfigCard: View {
             // Region selector
             VStack(alignment: .leading, spacing: 6) {
                 Text("REGION")
-                    .font(.system(size: 9, weight: .semibold, design: theme.fontDesign))
+                    .font(theme.font(size: 9, weight: .semibold))
                     .foregroundStyle(theme.textSecondary)
                     .tracking(0.5)
 
@@ -124,7 +124,7 @@ struct AlibabaConfigCard: View {
             // Cookie source selector
             VStack(alignment: .leading, spacing: 6) {
                 Text("COOKIE SOURCE")
-                    .font(.system(size: 9, weight: .semibold, design: theme.fontDesign))
+                    .font(theme.font(size: 9, weight: .semibold))
                     .foregroundStyle(theme.textSecondary)
                     .tracking(0.5)
 
@@ -143,12 +143,12 @@ struct AlibabaConfigCard: View {
             if alibabaCookieSource == .manual {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("COOKIE STRING")
-                        .font(.system(size: 9, weight: .semibold, design: theme.fontDesign))
+                        .font(theme.font(size: 9, weight: .semibold))
                         .foregroundStyle(theme.textSecondary)
                         .tracking(0.5)
 
                     TextField("", text: $alibabaManualCookieInput, prompt: Text("Paste cookie string...").foregroundStyle(theme.textTertiary))
-                        .font(.system(size: 12, weight: .medium, design: theme.fontDesign))
+                        .font(theme.font(size: 12, weight: .medium))
                         .foregroundStyle(theme.textPrimary)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 8)
@@ -167,7 +167,7 @@ struct AlibabaConfigCard: View {
                         }
 
                     Text("Copy the cookie from your browser's developer tools after logging in to Alibaba Cloud.")
-                        .font(.system(size: 9, weight: .medium, design: theme.fontDesign))
+                        .font(theme.font(size: 9, weight: .medium))
                         .foregroundStyle(theme.textTertiary)
                 }
             }
@@ -176,7 +176,7 @@ struct AlibabaConfigCard: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     Text("API KEY")
-                        .font(.system(size: 9, weight: .semibold, design: theme.fontDesign))
+                        .font(theme.font(size: 9, weight: .semibold))
                         .foregroundStyle(theme.textSecondary)
                         .tracking(0.5)
 
@@ -185,9 +185,9 @@ struct AlibabaConfigCard: View {
                     if settings.alibaba.hasAlibabaApiKey() {
                         HStack(spacing: 3) {
                             Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: 9))
+                                .font(theme.font(size: 9))
                             Text("Configured")
-                                .font(.system(size: 9, weight: .semibold, design: theme.fontDesign))
+                                .font(theme.font(size: 9, weight: .semibold))
                         }
                         .foregroundStyle(theme.statusHealthy)
                     }
@@ -201,7 +201,7 @@ struct AlibabaConfigCard: View {
                             SecureField("", text: $alibabaApiKeyInput, prompt: Text("sk-...").foregroundStyle(theme.textTertiary))
                         }
                     }
-                    .font(.system(size: 12, weight: .medium, design: theme.fontDesign))
+                    .font(theme.font(size: 12, weight: .medium))
                     .foregroundStyle(theme.textPrimary)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 8)
@@ -218,7 +218,7 @@ struct AlibabaConfigCard: View {
                         showAlibabaApiKey.toggle()
                     } label: {
                         Image(systemName: showAlibabaApiKey ? "eye.slash.fill" : "eye.fill")
-                            .font(.system(size: 11))
+                            .font(theme.font(size: 11))
                             .foregroundStyle(theme.textSecondary)
                             .frame(width: 28, height: 28)
                             .background(
@@ -236,7 +236,7 @@ struct AlibabaConfigCard: View {
                     ProgressView()
                         .scaleEffect(0.7)
                     Text("Testing connection...")
-                        .font(.system(size: 11, weight: .medium, design: theme.fontDesign))
+                        .font(theme.font(size: 11, weight: .medium))
                         .foregroundStyle(theme.textSecondary)
                 }
             } else {
@@ -246,7 +246,7 @@ struct AlibabaConfigCard: View {
                     }
                 } label: {
                     Text("Save & Test Connection")
-                        .font(.system(size: 11, weight: .medium, design: theme.fontDesign))
+                        .font(theme.font(size: 11, weight: .medium))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
@@ -260,7 +260,7 @@ struct AlibabaConfigCard: View {
 
             if let result = alibabaTestResult {
                 Text(result)
-                    .font(.system(size: 9, weight: .semibold, design: theme.fontDesign))
+                    .font(theme.font(size: 9, weight: .semibold))
                     .foregroundStyle(result.contains("Success") ? theme.statusHealthy : theme.statusCritical)
             }
 
@@ -268,9 +268,9 @@ struct AlibabaConfigCard: View {
             Link(destination: dashboardURL) {
                 HStack(spacing: 3) {
                     Text("Open Alibaba Cloud Console")
-                        .font(.system(size: 9, weight: .semibold, design: theme.fontDesign))
+                        .font(theme.font(size: 9, weight: .semibold))
                     Image(systemName: "arrow.up.right")
-                        .font(.system(size: 7, weight: .bold))
+                        .font(theme.font(size: 7, weight: .bold))
                 }
                 .foregroundStyle(theme.accentPrimary)
             }
@@ -284,9 +284,9 @@ struct AlibabaConfigCard: View {
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "trash.fill")
-                            .font(.system(size: 9))
+                            .font(theme.font(size: 9))
                         Text("Remove API Key")
-                            .font(.system(size: 9, weight: .semibold, design: theme.fontDesign))
+                            .font(theme.font(size: 9, weight: .semibold))
                     }
                     .foregroundStyle(theme.statusCritical)
                 }

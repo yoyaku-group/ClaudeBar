@@ -16,11 +16,11 @@ struct CustomCardURLField: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
                 Image(systemName: "globe")
-                    .font(.system(size: 9))
+                    .font(theme.font(size: 9))
                     .foregroundStyle(theme.textTertiary)
 
                 Text("CUSTOM CARD")
-                    .font(.system(size: 8, weight: .semibold, design: theme.fontDesign))
+                    .font(theme.font(size: 8, weight: .semibold))
                     .foregroundStyle(theme.textTertiary)
                     .tracking(0.5)
 
@@ -32,7 +32,7 @@ struct CustomCardURLField: View {
                         settings.provider.setCustomCardURL(nil, forProvider: providerId)
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 10))
+                            .font(theme.font(size: 10))
                             .foregroundStyle(theme.textTertiary)
                     }
                     .buttonStyle(.plain)
@@ -41,7 +41,7 @@ struct CustomCardURLField: View {
 
             TextField("https://example.com", text: $urlText)
                 .textFieldStyle(.plain)
-                .font(.system(size: 10, weight: .medium, design: theme.fontDesign))
+                .font(theme.font(size: 10, weight: .medium))
                 .foregroundStyle(theme.textPrimary)
                 .padding(6)
                 .background(

@@ -65,17 +65,17 @@ struct CodexConfigCard: View {
                     .frame(width: 28, height: 28)
 
                 Image(systemName: "terminal")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(theme.font(size: 12, weight: .semibold))
                     .foregroundStyle(theme.accentPrimary)
             }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("Codex Configuration")
-                    .font(.system(size: 14, weight: .bold, design: theme.fontDesign))
+                    .font(theme.font(size: 14, weight: .bold))
                     .foregroundStyle(theme.textPrimary)
 
                 Text("Data fetching method")
-                    .font(.system(size: 10, weight: .medium, design: theme.fontDesign))
+                    .font(theme.font(size: 10, weight: .medium))
                     .foregroundStyle(theme.textTertiary)
             }
 
@@ -87,7 +87,7 @@ struct CodexConfigCard: View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 6) {
                 Text("PROBE MODE")
-                    .font(.system(size: 9, weight: .semibold, design: theme.fontDesign))
+                    .font(theme.font(size: 9, weight: .semibold))
                     .foregroundStyle(theme.textSecondary)
                     .tracking(0.5)
 
@@ -108,34 +108,34 @@ struct CodexConfigCard: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: "terminal")
-                        .font(.system(size: 10))
+                        .font(theme.font(size: 10))
                         .foregroundStyle(codexProbeMode == .rpc ? theme.accentPrimary : theme.textTertiary)
                         .frame(width: 16)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text("RPC Mode")
-                            .font(.system(size: 10, weight: .semibold, design: theme.fontDesign))
+                            .font(theme.font(size: 10, weight: .semibold))
                             .foregroundStyle(codexProbeMode == .rpc ? theme.textPrimary : theme.textSecondary)
 
                         Text("Uses codex app-server via JSON-RPC. Default, works with any auth.")
-                            .font(.system(size: 9, weight: .medium, design: theme.fontDesign))
+                            .font(theme.font(size: 9, weight: .medium))
                             .foregroundStyle(theme.textTertiary)
                     }
                 }
 
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: "network")
-                        .font(.system(size: 10))
+                        .font(theme.font(size: 10))
                         .foregroundStyle(codexProbeMode == .api ? theme.accentPrimary : theme.textTertiary)
                         .frame(width: 16)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text("API Mode")
-                            .font(.system(size: 10, weight: .semibold, design: theme.fontDesign))
+                            .font(theme.font(size: 10, weight: .semibold))
                             .foregroundStyle(codexProbeMode == .api ? theme.textPrimary : theme.textSecondary)
 
                         Text("Calls ChatGPT API directly. Faster, uses OAuth credentials.")
-                            .font(.system(size: 9, weight: .medium, design: theme.fontDesign))
+                            .font(theme.font(size: 9, weight: .medium))
                             .foregroundStyle(theme.textTertiary)
                     }
                 }
@@ -147,17 +147,17 @@ struct CodexConfigCard: View {
 
                 HStack(spacing: 6) {
                     Image(systemName: hasCredentials ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                        .font(.system(size: 10))
+                        .font(theme.font(size: 10))
                         .foregroundStyle(hasCredentials ? theme.statusHealthy : theme.statusWarning)
 
                     Text(hasCredentials ? "OAuth credentials found" : "No OAuth credentials found")
-                        .font(.system(size: 9, weight: .semibold, design: theme.fontDesign))
+                        .font(theme.font(size: 9, weight: .semibold))
                         .foregroundStyle(hasCredentials ? theme.statusHealthy : theme.statusWarning)
                 }
 
                 if !hasCredentials {
                     Text("Run `codex` in terminal to authenticate, then credentials will be available.")
-                        .font(.system(size: 9, weight: .medium, design: theme.fontDesign))
+                        .font(theme.font(size: 9, weight: .medium))
                         .foregroundStyle(theme.textTertiary)
                 }
             }

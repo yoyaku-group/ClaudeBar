@@ -1,12 +1,11 @@
 name: Build YOYAKU Theme
 
+# Manual only (rules/02 cost discipline). Run via workflow_dispatch on the
+# branch to verify; the current artifact remains unsigned until release v2.
 on:
-  # Manual-only (rules/02 cost discipline): a macOS runner minute bills at 10x a
-  # Linux one — no per-push builds. Trigger from the Actions tab when needed.
   workflow_dispatch:
 
 env:
-  SWIFT_VERSION: "6.2"
   APP_NAME: ClaudeBar
 
 jobs:
@@ -18,13 +17,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Swift
-        uses: SwiftyLab/setup-swift@latest
-        with:
-          swift-version: ${{ env.SWIFT_VERSION }}
+      # No explicit Swift toolchain setup: use the runner's bundled Xcode, the
+      # same toolchain Tuist builds its macro prebuilts (SwiftSyntax) against.
+      # Installing a separate toolchain via SwiftyLab/setup-swift drifted out of
+      # sync with those prebuilts and broke the build (same fix as release.yml).
 
       - name: Install Tuist
         run: brew install tuist
+
+      - name: Clean Tuist Cache
+        run: |
+          rm -rf Tuist/.build/tuist-derived
+          tuist clean
 
       - name: Install Dependencies
         run: tuist install
@@ -33,6 +37,12 @@ jobs:
         run: |
           tuist generate --no-open
           ./scripts/fix-swiftterm-metal.sh
+
+      - name: Run Infrastructure Tests
+        run: tuist test Infrastructure
+
+      - name: Run Domain Tests
+        run: tuist test Domain
 
       - name: Build Release
         run: |

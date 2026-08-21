@@ -74,17 +74,17 @@ struct MiniMaxConfigCard: View {
                     .frame(width: 32, height: 32)
 
                 Image(systemName: "waveform")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(theme.font(size: 12, weight: .bold))
                     .foregroundStyle(.white)
             }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("MiniMax Configuration")
-                    .font(.system(size: 14, weight: .bold, design: theme.fontDesign))
+                    .font(theme.font(size: 14, weight: .bold))
                     .foregroundStyle(theme.textPrimary)
 
                 Text("Coding Plan quota tracking")
-                    .font(.system(size: 10, weight: .medium, design: theme.fontDesign))
+                    .font(theme.font(size: 10, weight: .medium))
                     .foregroundStyle(theme.textTertiary)
             }
 
@@ -97,7 +97,7 @@ struct MiniMaxConfigCard: View {
             // Region selector
             VStack(alignment: .leading, spacing: 6) {
                 Text("REGION")
-                    .font(.system(size: 9, weight: .semibold, design: theme.fontDesign))
+                    .font(theme.font(size: 9, weight: .semibold))
                     .foregroundStyle(theme.textSecondary)
                     .tracking(0.5)
 
@@ -119,7 +119,7 @@ struct MiniMaxConfigCard: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     Text("API KEY")
-                        .font(.system(size: 9, weight: .semibold, design: theme.fontDesign))
+                        .font(theme.font(size: 9, weight: .semibold))
                         .foregroundStyle(theme.textSecondary)
                         .tracking(0.5)
 
@@ -128,9 +128,9 @@ struct MiniMaxConfigCard: View {
                     if settings.minimax.hasMinimaxApiKey() {
                         HStack(spacing: 3) {
                             Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: 9))
+                                .font(theme.font(size: 9))
                             Text("Configured")
-                                .font(.system(size: 9, weight: .semibold, design: theme.fontDesign))
+                                .font(theme.font(size: 9, weight: .semibold))
                         }
                         .foregroundStyle(theme.statusHealthy)
                     }
@@ -144,7 +144,7 @@ struct MiniMaxConfigCard: View {
                             SecureField("", text: $miniMaxApiKeyInput, prompt: Text("eyJhbGci...").foregroundStyle(theme.textTertiary))
                         }
                     }
-                    .font(.system(size: 12, weight: .medium, design: theme.fontDesign))
+                    .font(theme.font(size: 12, weight: .medium))
                     .foregroundStyle(theme.textPrimary)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 8)
@@ -161,7 +161,7 @@ struct MiniMaxConfigCard: View {
                         showMiniMaxApiKey.toggle()
                     } label: {
                         Image(systemName: showMiniMaxApiKey ? "eye.slash.fill" : "eye.fill")
-                            .font(.system(size: 11))
+                            .font(theme.font(size: 11))
                             .foregroundStyle(theme.textSecondary)
                             .frame(width: 28, height: 28)
                             .background(
@@ -176,12 +176,12 @@ struct MiniMaxConfigCard: View {
             // Environment Variable
             VStack(alignment: .leading, spacing: 6) {
                 Text("API KEY ENV VAR (ALTERNATIVE)")
-                    .font(.system(size: 9, weight: .semibold, design: theme.fontDesign))
+                    .font(theme.font(size: 9, weight: .semibold))
                     .foregroundStyle(theme.textSecondary)
                     .tracking(0.5)
 
                 TextField("", text: $miniMaxAuthEnvVarInput, prompt: Text("MINIMAX_API_KEY").foregroundStyle(theme.textTertiary))
-                    .font(.system(size: 12, weight: .medium, design: theme.fontDesign))
+                    .font(theme.font(size: 12, weight: .medium))
                     .foregroundStyle(theme.textPrimary)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 8)
@@ -201,15 +201,15 @@ struct MiniMaxConfigCard: View {
             // Token lookup order
             VStack(alignment: .leading, spacing: 4) {
                 Text("API KEY LOOKUP ORDER")
-                    .font(.system(size: 9, weight: .semibold, design: theme.fontDesign))
+                    .font(theme.font(size: 9, weight: .semibold))
                     .foregroundStyle(theme.textSecondary)
                     .tracking(0.5)
 
                 Text("1. First checks environment variable (default: MINIMAX_API_KEY)")
-                    .font(.system(size: 10, weight: .medium, design: theme.fontDesign))
+                    .font(theme.font(size: 10, weight: .medium))
                     .foregroundStyle(theme.textTertiary)
                 Text("2. Falls back to API key entered above")
-                    .font(.system(size: 10, weight: .medium, design: theme.fontDesign))
+                    .font(theme.font(size: 10, weight: .medium))
                     .foregroundStyle(theme.textTertiary)
             }
 
@@ -219,7 +219,7 @@ struct MiniMaxConfigCard: View {
                     ProgressView()
                         .scaleEffect(0.7)
                     Text("Testing connection...")
-                        .font(.system(size: 11, weight: .medium, design: theme.fontDesign))
+                        .font(theme.font(size: 11, weight: .medium))
                         .foregroundStyle(theme.textSecondary)
                 }
             } else {
@@ -229,7 +229,7 @@ struct MiniMaxConfigCard: View {
                     }
                 } label: {
                     Text("Save & Test Connection")
-                        .font(.system(size: 11, weight: .medium, design: theme.fontDesign))
+                        .font(theme.font(size: 11, weight: .medium))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
@@ -243,22 +243,22 @@ struct MiniMaxConfigCard: View {
 
             if let result = miniMaxTestResult {
                 Text(result)
-                    .font(.system(size: 9, weight: .semibold, design: theme.fontDesign))
+                    .font(theme.font(size: 9, weight: .semibold))
                     .foregroundStyle(result.contains("Success") ? theme.statusHealthy : theme.statusCritical)
             }
 
             // Help link
             VStack(alignment: .leading, spacing: 4) {
                 Text("Get your API key from MiniMax platform")
-                    .font(.system(size: 9, weight: .semibold, design: theme.fontDesign))
+                    .font(theme.font(size: 9, weight: .semibold))
                     .foregroundStyle(theme.textTertiary)
 
                 Link(destination: miniMaxRegion.apiKeysURL) {
                     HStack(spacing: 3) {
                         Text("Open MiniMax API Keys")
-                            .font(.system(size: 9, weight: .semibold, design: theme.fontDesign))
+                            .font(theme.font(size: 9, weight: .semibold))
                         Image(systemName: "arrow.up.right")
-                            .font(.system(size: 7, weight: .bold))
+                            .font(theme.font(size: 7, weight: .bold))
                     }
                     .foregroundStyle(theme.accentPrimary)
                 }
@@ -273,9 +273,9 @@ struct MiniMaxConfigCard: View {
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "trash.fill")
-                            .font(.system(size: 9))
+                            .font(theme.font(size: 9))
                         Text("Remove API Key")
-                            .font(.system(size: 9, weight: .semibold, design: theme.fontDesign))
+                            .font(theme.font(size: 9, weight: .semibold))
                     }
                     .foregroundStyle(theme.statusCritical)
                 }

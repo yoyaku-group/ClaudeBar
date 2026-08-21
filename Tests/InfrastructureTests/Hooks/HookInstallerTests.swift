@@ -32,7 +32,10 @@ struct HookInstallerTests {
         #expect(events.contains("SubagentStop"))
         #expect(events.contains("Stop"))
         #expect(events.contains("UserPromptSubmit"))
-        #expect(events.count == 7)
+        // Context-pressure timeline events (2026-08-18)
+        #expect(events.contains("PreCompact"))
+        #expect(events.contains("PostCompact"))
+        #expect(events.count == 9)
     }
 
     @Test

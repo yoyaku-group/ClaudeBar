@@ -17,11 +17,13 @@ public enum SessionEventParser {
         }
 
         let cwd = json["cwd"] as? String ?? ""
+        let source = json["source"] as? String
 
         return SessionEvent(
             sessionId: sessionId,
             eventName: eventName,
-            cwd: cwd
+            cwd: cwd,
+            source: source
         )
     }
 }

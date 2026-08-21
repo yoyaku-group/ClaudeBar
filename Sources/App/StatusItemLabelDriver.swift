@@ -77,6 +77,26 @@ final class StatusItemLabelDriver {
         /// label keeps comparing equal across ticks and never repaints for the
         /// blink alone (see `render`'s early-out).
         var colonVisible: Bool = true
+        /// Glyph mode (text / running cat / both). Carried so flipping the
+        /// setting in Settings repaints the menu bar.
+        var glyphMode: MenuBarGlyphMode = .text
+        /// Current stride frame of the running cat. Advances on the cat timer,
+        /// so each tick produces unequal content and repaints — same trick as
+        /// `colonVisible`.
+        var catFrame: Int = 0
+        /// Worst remaining percentage across all enabled providers — drives the
+        /// cat's continuous green→amber→red tint. nil = no data (gray cat).
+        var catHealthPercent: Double?
+        /// Active multi-account email (when the selected provider is a
+        /// MultiAccountProvider with ≥2 accounts). Surfaced in the tooltip so
+        /// Ben can identify which Claude profile is logged in at a glance —
+        /// the menu-bar glyph itself doesn't carry it (cat + percentage only).
+        var accountEmail: String?
+        /// Compact suffix of the multi-account email rendered inline in the
+        /// dual-bar path (e.g. "ben@") — derived from `accountEmail`. nil when
+        /// no disambiguation is needed (single-account provider, or cat mode
+        /// active which doesn't render the badge at all).
+        var inlineEmailSuffix: String?
     }
 
     /// Attaches to the `NSStatusItem` exposed by MenuBarExtraAccess and starts
@@ -96,6 +116,7 @@ final class StatusItemLabelDriver {
         labelSync = sync
         sync.start()
         startBlinkLifecycle()
+        startCatLifecycle()
 
         // SwiftUI wipes `button.image` whenever the scene re-evaluates (every
         // dropdown open/close flips the `isPresented` binding). Restore it
@@ -145,6 +166,15 @@ final class StatusItemLabelDriver {
         let label = freshLabel ?? lastKnownLabel(whenFreshIsMissing: freshLabel)
         let hasCountdownColon = label.map { !CountdownColon.ranges(in: $0.text).isEmpty } ?? false
 
+        // Email of the active multi-account profile (only when the selected
+        // provider is multi-account). Surfaced in the tooltip so two Claude
+        // profiles stay distinguishable from the menu bar alone.
+        let accountEmail: String? = {
+            guard let multi = monitor.selectedProvider as? any MultiAccountProvider,
+                  multi.accounts.count > 1 else { return nil }
+            return multi.activeAccount.email
+        }()
+
         return LabelContent(
             label: label,
             fallbackStatus: effectiveSelectedProviderStatus,
@@ -152,8 +182,44 @@ final class StatusItemLabelDriver {
             themeModeId: settings.themeMode,
             stacked: settings.menuBarStackedEnabled,
             stackedSize: settings.menuBarStackedSize,
-            colonVisible: hasCountdownColon ? blinkPhase : true
+            colonVisible: hasCountdownColon ? blinkPhase : true,
+            glyphMode: settings.menuBarGlyphMode,
+            catFrame: catFrameIndex,
+            catHealthPercent: worstEnabledPercent,
+            accountEmail: accountEmail,
+            inlineEmailSuffix: accountEmail.flatMap { Self.compactEmailSuffix(from: $0) }
         )
+    }
+
+    /// Builds the compact inline email suffix used by the dual-bar renderer.
+    /// Strategy: keep the local-part (everything before "@") + the first
+    /// letter of the domain. Examples:
+    ///   - "webmaster@yoyaku.fr"        → "webmaster@y"
+    ///   - "tech@yoyaku.fr"             → "tech@y"
+    ///   - "benjamin.belaga@gmail.com"  → "benjamin.belaga@g"
+    /// This keeps the badge readable in 9pt without overflowing the menu-bar
+    /// width — full emails live in the tooltip + dashboard row.
+    private static func compactEmailSuffix(from email: String) -> String? {
+        let parts = email.split(separator: "@", maxSplits: 1, omittingEmptySubsequences: false)
+        guard parts.count == 2, !parts[0].isEmpty else { return nil }
+        let local = String(parts[0])
+        let domainFirst = parts[1].first.map { String($0) } ?? ""
+        guard !domainFirst.isEmpty else { return nil }
+        return "\(local)@\(domainFirst)"
+    }
+
+    /// Worst percentage remaining across every enabled provider's windows —
+    /// the number the cat's tint tracks (matches the overview's "worst"
+    /// semantics). nil when no provider has produced data yet.
+    private var worstEnabledPercent: Double? {
+        var worst: Double?
+        for provider in monitor.enabledProviders {
+            guard let snapshot = provider.snapshot else { continue }
+            for quota in snapshot.quotas where !quota.isDollarBased {
+                worst = min(worst ?? quota.percentRemaining, quota.percentRemaining)
+            }
+        }
+        return worst
     }
 
     /// Bridges a momentarily-missing menu-bar label. The configured quota window
@@ -192,7 +258,14 @@ final class StatusItemLabelDriver {
         lastImage = image
         button.image = image
         button.imagePosition = .imageOnly
-        button.toolTip = content.label?.text
+        // Tooltip: prepend the multi-account email so hovering reveals which
+        // Claude profile is logged in. Falls back to label text when the
+        // provider is single-account (no disambiguation needed).
+        if let email = content.accountEmail {
+            button.toolTip = "\(email) — \(content.label?.text ?? "")"
+        } else {
+            button.toolTip = content.label?.text
+        }
     }
 
     private func resolvedTheme(for themeModeId: String) -> any AppThemeProvider {
@@ -217,13 +290,37 @@ final class StatusItemLabelDriver {
             parts.append(symbolImage("terminal.fill", color: NSColor(phase.color)))
         }
 
-        if let label = content.label {
-            // Stacked mode only applies to a dual-window label: two windows
-            // become two smaller lines (halving the width the label needs).
-            // Anything else, including a dual label with stacking off, keeps
-            // the classic single-line rendering. The tooltip always stays the
-            // full joined text, so no information is lost either way.
-            if content.stacked, label.segments.count == 2 {
+        // Running cat (RunCat-style): its tint continuously reflects overall
+        // quota health — animation + status in a single glyph. In `.cat` mode
+        // it replaces the text readout entirely (the tooltip keeps the text).
+        if content.glyphMode.showsCat {
+            parts.append(RunningCatRenderer.image(
+                frame: content.catFrame,
+                color: Self.catTint(for: content.catHealthPercent)
+            ))
+        }
+
+        if content.glyphMode.showsText, let label = content.label {
+            // Dual-bar path takes priority over stacked text when both windows
+            // exist, the percent values are present, AND an inline email
+            // suffix is available — that's the "see your 2 quota windows +
+            // which Claude profile at a single glance" ask. Without a suffix
+            // (single-account provider, no email recorded) or without percent
+            // (percentage display off, dollar-based quota, no data yet), fall
+            // back to the stacked text renderer so the menu bar still works.
+            if content.stacked,
+               label.segments.count == 2,
+               let suffix = content.inlineEmailSuffix,
+               let topPct = label.segments[0].percentRemaining,
+               let bottomPct = label.segments[1].percentRemaining {
+                parts.append(StatusBarDualBarImageRenderer.image(
+                    top: (topPct, theme.statusColor(for: label.segments[0].status)),
+                    bottom: (bottomPct, theme.statusColor(for: label.segments[1].status)),
+                    track: theme.progressTrack,
+                    emailSuffix: suffix,
+                    emailSuffixColor: theme.textTertiary
+                ))
+            } else if content.stacked, label.segments.count == 2 {
                 parts.append(StatusBarStackedImageRenderer.image(
                     top: (label.segments[0].text, theme.statusColor(for: label.segments[0].status)),
                     bottom: (label.segments[1].text, theme.statusColor(for: label.segments[1].status)),
@@ -237,8 +334,8 @@ final class StatusItemLabelDriver {
                     colonVisible: content.colonVisible
                 ))
             }
-        } else {
-            let symbolName = theme.statusBarIconName ?? fallbackIconName(for: content.fallbackStatus)
+        } else if !content.glyphMode.showsCat {
+            let symbolName = theme.statusBarIconName ?? theme.statusIcon(for: content.fallbackStatus)
             parts.append(symbolImage(
                 symbolName,
                 color: NSColor(theme.statusColor(for: content.fallbackStatus))
@@ -248,13 +345,39 @@ final class StatusItemLabelDriver {
         return hStack(parts, spacing: 3)
     }
 
-    private static func fallbackIconName(for status: QuotaStatus) -> String {
-        switch status {
-        case .depleted: "chart.bar.xaxis"
-        case .critical: "exclamationmark.triangle.fill"
-        case .warning, .healthy: "chart.bar.fill"
+    /// Continuous green→amber→red tint for the cat's health, interpolated —
+    /// no hard status bands, so the color "glides" as quotas drain (Ben:
+    /// « un chat qui change de couleur subtilement »). nil (no data) = gray.
+    static func catTint(for percent: Double?) -> NSColor {
+        guard let percent else {
+            return NSColor.systemGray
+        }
+        let green = NSColor(red: 0.19, green: 0.82, blue: 0.35, alpha: 1)   // #30D158
+        let amber = NSColor(red: 1.0, green: 0.58, blue: 0.0, alpha: 1)     // #FF9500
+        let red = NSColor(red: 1.0, green: 0.27, blue: 0.23, alpha: 1)      // #FF453A
+        let clamped = min(max(percent, 0), 100)
+        switch clamped {
+        case 40...100:
+            return interpolate(green, amber, (100 - clamped) / 60)
+        case 5..<40:
+            return interpolate(amber, red, (40 - clamped) / 35)
+        default:
+            return red
         }
     }
+
+    private static func interpolate(_ a: NSColor, _ b: NSColor, _ t: Double) -> NSColor {
+        let t = CGFloat(min(max(t, 0), 1))
+        return NSColor(
+            red: a.redComponent + (b.redComponent - a.redComponent) * t,
+            green: a.greenComponent + (b.greenComponent - a.greenComponent) * t,
+            blue: a.blueComponent + (b.blueComponent - a.blueComponent) * t,
+            alpha: 1
+        )
+    }
+
+    // MARK: - (removed fallbackIconName — superseded by theme.statusIcon(for:) in AppThemeProvider)
+
 
     /// Renders an SF Symbol tinted with a fixed color, since the status item
     /// image is non-template (theme colors must survive menu bar appearance).
@@ -345,6 +468,57 @@ final class StatusItemLabelDriver {
         blinkTimer = nil
         // Never leave the colon parked in its dimmed phase.
         blinkPhase = true
+        labelSync?.refreshNow()
+    }
+
+    // MARK: - Cat Animation
+
+    /// ~10 fps — a RunCat-cadence run. The composed cat is ~16pt, so the
+    /// redraw cost is negligible; the timer only runs while the cat is shown.
+    private static let catFrameInterval: TimeInterval = 0.1
+
+    private var catTimer: Timer?
+    private var catFrameIndex = 0
+    private var catSync: ObservationRenderSync<Bool>?
+
+    /// Sibling of `startBlinkLifecycle`: runs the stride timer only while the
+    /// glyph mode includes the cat, and never when the user asked the system
+    /// for reduced motion (static frame instead).
+    private func startCatLifecycle() {
+        guard catSync == nil else { return }
+        let sync = ObservationRenderSync<Bool>(
+            read: { [self] in settings.menuBarGlyphMode.showsCat },
+            render: { [self] showsCat in
+                let animate = showsCat && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+                animate ? startCatTimer() : stopCatTimer()
+            }
+        )
+        catSync = sync
+        sync.start()
+    }
+
+    private func startCatTimer() {
+        guard catTimer == nil else { return }
+        let timer = Timer(timeInterval: Self.catFrameInterval, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.catFrameIndex = (self.catFrameIndex + 1) % RunningCatRenderer.frameCount
+                // refreshNow keeps the observation registration intact and the
+                // equality early-out in render() — each tick's frame index
+                // differs, so exactly one repaint happens.
+                self.labelSync?.refreshNow()
+            }
+        }
+        // .common: keep running while any menu is open (tracking mode).
+        RunLoop.main.add(timer, forMode: .common)
+        catTimer = timer
+    }
+
+    private func stopCatTimer() {
+        guard catTimer != nil else { return }
+        catTimer?.invalidate()
+        catTimer = nil
+        catFrameIndex = 0
         labelSync?.refreshNow()
     }
 
@@ -576,6 +750,105 @@ enum StatusBarStackedImageRenderer {
     /// negative). Null for a line with no ink, e.g. all whitespace.
     private static func inkBounds(of line: NSAttributedString) -> CGRect {
         CTLineGetBoundsWithOptions(CTLineCreateWithAttributedString(line), [.useGlyphPathBounds])
+    }
+}
+
+/// Renders the dual-window label as **two stacked horizontal progress bars** instead
+/// of two stacked text lines. The bars give Ben a visual "scan in 2 seconds" cue for
+/// "what I have for the session" vs "what I have for the week" without opening the
+/// dropdown (Phase 7 — the `Ben en deux secondes` ask).
+///
+/// Constraints:
+/// - Menu-bar item is 22pt tall (`StatusBarStackedImageRenderer.maxHeight`).
+/// - Two 4pt bars + 1pt spacing = 9pt total, well under the cap.
+/// - Bars are 60pt wide each, both left-aligned (matching the stacked text layout).
+/// - Percent fill is rounded to integer pixels (no sub-pixel artifacts at 1x).
+/// - Track + fill colors are theme-aware: track = `theme.progressTrack`, fill = the
+///   per-window `statusColor` (the same color the stacked text would have used).
+enum StatusBarDualBarImageRenderer {
+    /// Width of each individual bar.
+    private static let barWidth: CGFloat = 60
+    /// Height of each individual bar.
+    private static let barHeight: CGFloat = 4
+    /// Vertical breathing room between the two bars.
+    private static let barSpacing: CGFloat = 1
+
+    @MainActor
+    static func image(
+        top: (percent: Double, color: Color),
+        bottom: (percent: Double, color: Color),
+        track: Color,
+        emailSuffix: String? = nil,
+        emailSuffixColor: Color = .secondary
+    ) -> NSImage {
+        let totalHeight = barHeight * 2 + barSpacing
+        let baseWidth = barWidth
+
+        // Pre-measure the email-suffix text to compute final image width.
+        // Use a small font so the badge never overwhelms the bars visually.
+        let suffixFont = NSFont.monospacedSystemFont(ofSize: 9, weight: .regular)
+        let suffixAttributes: [NSAttributedString.Key: Any] = [
+            .font: suffixFont,
+            .foregroundColor: NSColor(emailSuffixColor),
+        ]
+        let suffixAttributed = emailSuffix.map { NSAttributedString(string: $0, attributes: suffixAttributes) }
+        let suffixSize = suffixAttributed?.size() ?? .zero
+        let suffixSpacing: CGFloat = emailSuffix != nil ? 4 : 0
+        let totalWidth = baseWidth + (suffixSize.width > 0 ? suffixSize.width + suffixSpacing : 0)
+        let imageSize = NSSize(width: totalWidth, height: totalHeight)
+        let image = NSImage(size: imageSize, flipped: false) { _ in
+            // Top bar — flipped: false so y grows upward; top bar sits at the top edge.
+            drawBar(
+                at: NSPoint(x: 0, y: barHeight + barSpacing),
+                percent: top.percent,
+                color: NSColor(top.color),
+                track: NSColor(track)
+            )
+            // Bottom bar — at y = 0.
+            drawBar(
+                at: NSPoint(x: 0, y: 0),
+                percent: bottom.percent,
+                color: NSColor(bottom.color),
+                track: NSColor(track)
+            )
+            // Email suffix badge — drawn after the bars, vertically centered
+            // on the bar stack so it sits visually next to the bottom bar.
+            if let suffixAttributed {
+                let xOffset = baseWidth + suffixSpacing
+                let yOffset = (totalHeight - suffixSize.height) / 2
+                suffixAttributed.draw(at: NSPoint(x: xOffset, y: yOffset))
+            }
+            return true
+        }
+        image.isTemplate = false
+        return image
+    }
+
+    /// Draws a single rounded-rect track + a rounded-rect fill clipped to the
+    /// remaining percent. The corner radius matches half the bar height so the
+    /// ends render as proper pills rather than squared-off boxes.
+    private static func drawBar(at origin: NSPoint, percent: Double, color: NSColor, track: NSColor) {
+        let trackRect = NSRect(
+            x: origin.x,
+            y: origin.y,
+            width: barWidth,
+            height: barHeight
+        )
+        let trackPath = NSBezierPath(roundedRect: trackRect, xRadius: barHeight / 2, yRadius: barHeight / 2)
+        track.setFill()
+        trackPath.fill()
+
+        let clamped = min(max(percent, 0), 100) / 100
+        let fillWidth = max(barHeight, ceil(CGFloat(clamped) * barWidth))
+        let fillRect = NSRect(
+            x: origin.x,
+            y: origin.y,
+            width: fillWidth,
+            height: barHeight
+        )
+        let fillPath = NSBezierPath(roundedRect: fillRect, xRadius: barHeight / 2, yRadius: barHeight / 2)
+        color.setFill()
+        fillPath.fill()
     }
 }
 

@@ -13,6 +13,11 @@ public final class SessionMonitor {
     /// Recently completed sessions (most recent first)
     public private(set) var recentSessions: [ClaudeSession] = []
 
+    /// Notable lifecycle events for the panel timeline (forks, compactions),
+    /// newest first, capped — Ben's "Session forked" / "Compaction complete"
+    /// ask (2026-08-18). Probe-origin events are filtered at ingestion.
+    public private(set) var recentNotableEvents: [SessionEvent] = []
+
     /// Maximum number of recent sessions to keep
     private let maxRecentSessions: Int
 
@@ -24,6 +29,7 @@ public final class SessionMonitor {
 
     /// Processes a session event and updates state accordingly.
     public func processEvent(_ event: SessionEvent) {
+        recordIfNotable(event)
         switch event.eventName {
         case .sessionStart:
             handleSessionStart(event)
@@ -39,6 +45,29 @@ public final class SessionMonitor {
             handleStop(event)
         case .userPromptSubmit:
             handleUserPromptSubmit(event)
+        case .preCompact, .postCompact:
+            // Timeline-only events — no session-state transition.
+            break
+        }
+    }
+
+    /// Keeps fork and compaction events for the timeline. Probe-origin
+    /// events never qualify (issue #172).
+    private func recordIfNotable(_ event: SessionEvent) {
+        guard !event.isClaudeBarProbe else { return }
+        let notable: Bool
+        switch event.eventName {
+        case .preCompact, .postCompact:
+            notable = true
+        case .sessionStart where event.source == "fork":
+            notable = true
+        default:
+            notable = false
+        }
+        guard notable else { return }
+        recentNotableEvents.insert(event, at: 0)
+        if recentNotableEvents.count > 20 {
+            recentNotableEvents.removeLast(recentNotableEvents.count - 20)
         }
     }
 

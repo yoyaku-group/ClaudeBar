@@ -27,6 +27,9 @@ struct MenuContentView: View {
     @State private var pillsOverflow = false
     @State private var pillsContentWidth: CGFloat = 0
     @State private var pillsViewportWidth: CGFloat = 0
+    /// Per-harness session/activity tracking (guardian tail + transcript
+    /// counts) — owned here so it lives exactly as long as the panel content.
+    @State private var harTracker = HarUsageTracker()
 
     /// The currently selected provider ID (from monitor, which is @Observable)
     private var selectedProviderId: String {
@@ -242,7 +245,7 @@ struct MenuContentView: View {
                 // Christmas star sparkle overlay
                 if theme.id == "christmas" {
                     Image(systemName: "sparkle")
-                        .font(.system(size: 10))
+                        .font(theme.font(size: 10))
                         .foregroundStyle(theme.accentPrimary)
                         .offset(x: 14, y: -14)
                 }
@@ -251,19 +254,19 @@ struct MenuContentView: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {
                     Text("ClaudeBar")
-                        .font(.system(size: 18, weight: .bold, design: theme.fontDesign))
+                        .font(theme.font(size: 18, weight: .bold))
                         .foregroundStyle(theme.textPrimary)
 
                     // Christmas gift icon
                     if theme.id == "christmas" {
                         Image(systemName: "gift.fill")
-                            .font(.system(size: 12))
+                            .font(theme.font(size: 12))
                             .foregroundStyle(theme.accentPrimary)
                     }
                 }
 
                 Text(headerSubtitle)
-                    .font(.system(size: 11, weight: .medium, design: theme.fontDesign))
+                    .font(theme.font(size: 11, weight: .medium))
                     .foregroundStyle(theme.id == "cli" ? theme.accentPrimary : theme.textSecondary)
             }
 
@@ -309,7 +312,7 @@ struct MenuContentView: View {
             )
 
             Text(statusText)
-                .font(.system(size: 11, weight: .medium, design: theme.fontDesign))
+                .font(theme.font(size: 11, weight: .medium))
                 .foregroundStyle(theme.textPrimary)
         }
         .padding(.horizontal, 12)
@@ -416,7 +419,16 @@ struct MenuContentView: View {
             if providers.isEmpty {
                 emptyState
             } else {
-                overviewContent(providers: providers)
+                VStack(spacing: 12) {
+                    overviewContent(providers: providers)
+                    SessionsCardView(tracker: harTracker, sessionMonitor: sessionMonitor)
+                    GuardianCardView(tracker: harTracker)
+                }
+                .task {
+                    // Light 60s tick + throttled transcript scan; lives with
+                    // the panel ("traquer ce que j'utilise").
+                    harTracker.start()
+                }
             }
         } else if let provider = selectedProvider, let snapshot = provider.snapshot {
             VStack(spacing: 12) {
@@ -438,17 +450,14 @@ struct MenuContentView: View {
         // Scrolling is owned by the shared middle-region ScrollView in
         // `body`; nesting another vertical ScrollView here would break
         // height negotiation and swallow gestures.
-        VStack(spacing: 12) {
-            ForEach(Array(providers.enumerated()), id: \.element.id) { index, provider in
-                if index > 0 {
-                    Divider()
-                        .background(theme.glassBorder)
-                }
-                providerSection(provider: provider)
-            }
-        }
-        .opacity(animateIn ? 1 : 0)
-        .animation(.easeOut(duration: 0.5).delay(0.2), value: animateIn)
+        //
+        // Comprehension-first dashboard (2026-08-18): rows sorted by worst
+        // remaining % (or soonest reset), one-click Session 5h / Semaine / Tout
+        // window selector, relative reset times only. providerSection remains
+        // for the single-provider view.
+        OverviewDashboardView(providers: providers, settings: settings)
+            .opacity(animateIn ? 1 : 0)
+            .animation(.easeOut(duration: 0.5).delay(0.2), value: animateIn)
     }
 
     private func providerSection(provider: any AIProvider) -> some View {
@@ -470,7 +479,7 @@ struct MenuContentView: View {
             ProviderIconView(providerId: provider.id, size: 20, showGlow: false)
 
             Text(provider.name)
-                .font(.system(size: 13, weight: .semibold, design: theme.fontDesign))
+                .font(theme.font(size: 13, weight: .semibold))
                 .foregroundStyle(theme.textPrimary)
 
             Spacer()
@@ -485,11 +494,11 @@ struct MenuContentView: View {
     private func compactErrorState(provider: any AIProvider) -> some View {
         HStack(spacing: 8) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 12))
+                .font(theme.font(size: 12))
                 .foregroundStyle(theme.statusWarning)
 
             Text(provider.lastError?.localizedDescription ?? "Unavailable")
-                .font(.system(size: 11, weight: .medium, design: theme.fontDesign))
+                .font(theme.font(size: 11, weight: .medium))
                 .foregroundStyle(theme.textTertiary)
                 .lineLimit(1)
 
@@ -508,21 +517,21 @@ struct MenuContentView: View {
                     .frame(width: 32, height: 32)
 
                 Text(String(displayName.prefix(1)).uppercased())
-                    .font(.system(size: 14, weight: .bold, design: theme.fontDesign))
+                    .font(theme.font(size: 14, weight: .bold))
                     .foregroundStyle(.white)
             }
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(displayName)
-                        .font(.system(size: 12, weight: .medium, design: theme.fontDesign))
+                        .font(theme.font(size: 12, weight: .medium))
                         .foregroundStyle(theme.textPrimary)
                         .lineLimit(1)
 
                     // Account tier badge
                     if let accountTier = snapshot.accountTier {
                         Text(accountTier.badgeText)
-                            .font(.system(size: 8, weight: .semibold, design: theme.fontDesign))
+                            .font(theme.font(size: 8, weight: .semibold))
                             .foregroundStyle(.white)
                             .padding(.horizontal, 5)
                             .padding(.vertical, 2)
@@ -534,7 +543,7 @@ struct MenuContentView: View {
                 }
 
                 Text("Updated \(snapshot.ageDescription)")
-                    .font(.system(size: 10, weight: .semibold, design: theme.fontDesign))
+                    .font(theme.font(size: 10, weight: .semibold))
                     .foregroundStyle(theme.textTertiary)
             }
 
@@ -543,7 +552,7 @@ struct MenuContentView: View {
             // Stale indicator
             if snapshot.isStale {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 12))
+                    .font(theme.font(size: 12))
                     .foregroundStyle(theme.statusWarning)
             }
         }
@@ -589,7 +598,7 @@ struct MenuContentView: View {
                     }
 
                     Text((group.title ?? "Other").uppercased())
-                        .font(.system(size: 9, weight: .semibold, design: theme.fontDesign))
+                        .font(theme.font(size: 9, weight: .semibold))
                         .foregroundStyle(theme.textSecondary)
                         .tracking(0.5)
 
@@ -597,17 +606,17 @@ struct MenuContentView: View {
 
                     if case .headerInline(let note) = group.notePlacement {
                         Text(note)
-                            .font(.system(size: 9, weight: .medium, design: theme.fontDesign))
+                            .font(theme.font(size: 9, weight: .medium))
                             .foregroundStyle(theme.textTertiary)
                     } else if isNoteOnly {
                         Text("No usage data")
-                            .font(.system(size: 9, weight: .medium, design: theme.fontDesign))
+                            .font(theme.font(size: 9, weight: .medium))
                             .foregroundStyle(theme.textTertiary)
                     } else {
                         // Collapsed sections keep their headline number visible.
                         if isCollapsed, let lowest = group.lowestQuota {
                             Text("\(Int(lowest.percentRemaining))% left")
-                                .font(.system(size: 9, weight: .semibold, design: theme.fontDesign))
+                                .font(theme.font(size: 9, weight: .semibold))
                                 .foregroundStyle(theme.textTertiary)
                         }
 
@@ -626,7 +635,7 @@ struct MenuContentView: View {
                 // its own row - never silently dropped.
                 if case .row(let note) = group.notePlacement {
                     Text(note)
-                        .font(.system(size: 9, weight: .medium, design: theme.fontDesign))
+                        .font(theme.font(size: 9, weight: .medium))
                         .foregroundStyle(theme.textTertiary)
                 }
 
@@ -752,17 +761,17 @@ struct MenuContentView: View {
                     .frame(width: 60, height: 60)
 
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 28))
+                    .font(theme.font(size: 28))
                     .foregroundStyle(theme.statusWarning)
             }
 
             Text("\(selectedProvider?.name ?? selectedProviderId) Unavailable")
-                .font(.system(size: 14, weight: .bold, design: theme.fontDesign))
+                .font(theme.font(size: 14, weight: .bold))
                 .foregroundStyle(theme.textPrimary)
 
             // Show actual error message if available, otherwise generic message
             Text(selectedProvider?.lastError?.localizedDescription ?? "Install CLI or check configuration")
-                .font(.system(size: 11, weight: .semibold, design: theme.fontDesign))
+                .font(theme.font(size: 11, weight: .semibold))
                 .foregroundStyle(theme.textTertiary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 16)
@@ -826,7 +835,7 @@ struct MenuContentView: View {
                                 .tint(.white)
                         } else {
                             Image(systemName: "gift.fill")
-                                .font(.system(size: 12, weight: .bold))
+                                .font(theme.font(size: 12, weight: .bold))
                                 .foregroundStyle(.white)
                         }
                     }
@@ -849,7 +858,7 @@ struct MenuContentView: View {
                         .frame(width: 32, height: 32)
 
                     Image(systemName: "gearshape.fill")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(theme.font(size: 12, weight: .bold))
                         .foregroundStyle(theme.textSecondary)
 
                     // Update available indicator
@@ -875,7 +884,7 @@ struct MenuContentView: View {
                         .frame(width: 32, height: 32)
 
                     Image(systemName: "xmark")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(theme.font(size: 12, weight: .bold))
                         .foregroundStyle(theme.textSecondary)
                 }
             }
@@ -961,10 +970,10 @@ struct ProviderPill: View {
         Button(action: action) {
             HStack(spacing: 4) {
                 Image(systemName: providerIcon)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(theme.font(size: 10, weight: .semibold))
 
                 Text(providerName)
-                    .font(.system(size: 11, weight: .medium, design: theme.fontDesign))
+                    .font(theme.font(size: 11, weight: .medium))
                     .lineLimit(1)
                     .fixedSize()
             }
@@ -1131,11 +1140,11 @@ struct WrappedStatCard: View {
                 // Left side: icon and type label
                 HStack(spacing: 5) {
                     Image(systemName: iconName)
-                        .font(.system(size: 9, weight: .bold))
+                        .font(theme.font(size: 9, weight: .bold))
                         .foregroundStyle(statusColor)
 
                     Text((quota.compactTitle ?? quota.quotaType.displayName).uppercased())
-                        .font(.system(size: 8, weight: .medium, design: theme.fontDesign))
+                        .font(theme.font(size: 8, weight: .medium))
                         .foregroundStyle(theme.textSecondary)
                         .tracking(0.3)
                 }
@@ -1158,12 +1167,12 @@ struct WrappedStatCard: View {
                    let dollarCap = quota.formattedDollarCap {
                     HStack(alignment: .firstTextBaseline, spacing: 2) {
                         Text(dollarUsed)
-                            .font(.system(size: 20, weight: .heavy, design: theme.fontDesign))
+                            .font(theme.font(size: 20, weight: .heavy))
                             .foregroundStyle(theme.textPrimary)
                             .contentTransition(.numericText())
 
                         Text("of \(dollarCap)")
-                            .font(.system(size: 9, weight: .semibold, design: theme.fontDesign))
+                            .font(theme.font(size: 9, weight: .semibold))
                             .foregroundStyle(theme.textSecondary)
                     }
                     .lineLimit(1)
@@ -1171,18 +1180,18 @@ struct WrappedStatCard: View {
                     .layoutPriority(1)
                 } else if let dollarText = quota.formattedDollarRemaining {
                     Text(dollarText)
-                        .font(.system(size: 18, weight: .bold, design: theme.fontDesign))
+                        .font(theme.font(size: 18, weight: .bold))
                         .foregroundStyle(theme.textPrimary)
                         .contentTransition(.numericText())
                 } else {
                     HStack(alignment: .firstTextBaseline, spacing: 1) {
                         Text("\(Int(quota.displayPercent(mode: effectiveDisplayMode)))")
-                            .font(.system(size: 26, weight: .bold, design: theme.fontDesign))
+                            .font(theme.font(size: 26, weight: .bold))
                             .foregroundStyle(effectiveDisplayMode == .pace ? paceColor : theme.textPrimary)
                             .contentTransition(.numericText())
 
                         Text("%")
-                            .font(.system(size: 13, weight: .medium, design: theme.fontDesign))
+                            .font(theme.font(size: 13, weight: .medium))
                             .foregroundStyle(effectiveDisplayMode == .pace ? paceColor.opacity(0.7) : theme.textTertiary)
                     }
                 }
@@ -1190,9 +1199,21 @@ struct WrappedStatCard: View {
                 Spacer(minLength: 4)
 
                 Text(valueCaption)
-                    .font(.system(size: isCappedSpend ? 10 : 12, weight: .medium, design: theme.fontDesign))
+                    .font(theme.font(size: isCappedSpend ? 10 : 12, weight: .medium))
                     .fixedSize()
                     .foregroundStyle(effectiveDisplayMode == .pace ? paceColor.opacity(0.8) : theme.textTertiary)
+            }
+
+            // Pace insight line
+            if effectiveDisplayMode == .pace, let insight = quota.paceInsight {
+                HStack(spacing: 3) {
+                    Image(systemName: "lightbulb.fill")
+                        .font(theme.font(size: 7))
+                    Text(insight)
+                        .font(theme.font(size: 8, weight: .medium))
+                }
+                .foregroundStyle(paceColor.opacity(0.8))
+                .lineLimit(1)
             }
 
             // Progress bar with gradient and pace tick
@@ -1236,10 +1257,10 @@ struct WrappedStatCard: View {
             if showsReset, let resetText = quota.resetTimestampDescription ?? quota.resetText ?? quota.resetDescription {
                 HStack(spacing: 3) {
                     Image(systemName: "clock.fill")
-                        .font(.system(size: 7))
+                        .font(theme.font(size: 7))
 
                     Text(resetText)
-                        .font(.system(size: 8, weight: .medium, design: theme.fontDesign))
+                        .font(theme.font(size: 8, weight: .medium))
                 }
                 .foregroundStyle(theme.textTertiary)
                 .lineLimit(1)
@@ -1306,7 +1327,7 @@ struct LoadingSpinnerView: View {
             }
 
             Text("Fetching usage data...")
-                .font(.system(size: 13, weight: .medium, design: theme.fontDesign))
+                .font(theme.font(size: 13, weight: .medium))
                 .foregroundStyle(theme.textSecondary)
         }
         .frame(height: 140)
@@ -1340,11 +1361,11 @@ struct WrappedActionButton: View {
                         .tint(theme.textPrimary)
                 } else {
                     Image(systemName: icon)
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(theme.font(size: 12, weight: .semibold))
                 }
 
                 Text(label)
-                    .font(.system(size: 12, weight: .medium, design: theme.fontDesign))
+                    .font(theme.font(size: 12, weight: .medium))
                     .fixedSize()
             }
             .foregroundStyle(isHovering ? .white : theme.textPrimary)
@@ -1397,6 +1418,18 @@ struct VisualEffectBlur: NSViewRepresentable {
 /// app level before they reach the NSScrollView, which would otherwise ignore
 /// vertical deltas in a horizontal-only scroll view.
 struct HorizontalScrollBooster: NSViewRepresentable {
+    /// AppKit guarantees local event monitors run on the main thread, but its
+    /// pre-concurrency callback type does not express that and `NSEvent` is
+    /// explicitly non-Sendable. This box only bridges the value into the
+    /// checked `MainActor.assumeIsolated` region below.
+    private final class MainThreadEvent: @unchecked Sendable {
+        var value: NSEvent
+
+        init(value: NSEvent) {
+            self.value = value
+        }
+    }
+
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
         context.coordinator.view = view
@@ -1414,48 +1447,42 @@ struct HorizontalScrollBooster: NSViewRepresentable {
         Coordinator()
     }
 
-    class Coordinator {
+    @MainActor
+    final class Coordinator {
         var monitor: Any?
         weak var view: NSView?
 
         func startMonitoring() {
             monitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
-                guard let self,
-                      let view = self.view,
-                      let scrollView = view.enclosingScrollView else {
-                    return event
+                let eventBox = MainThreadEvent(value: event)
+                MainActor.assumeIsolated {
+                    self?.transform(eventBox)
                 }
-
-                // Only act on events over this scroll view
-                let point = scrollView.convert(event.locationInWindow, from: nil)
-                guard scrollView.bounds.contains(point) else {
-                    return event
-                }
-
-                // Only convert predominantly vertical scrolls
-                guard abs(event.scrollingDeltaY) > abs(event.scrollingDeltaX) else {
-                    return event
-                }
-
-                guard let cgEvent = event.cgEvent?.copy() else {
-                    return event
-                }
-
-                // Swap vertical → horizontal
-                cgEvent.setDoubleValueField(
-                    .scrollWheelEventDeltaAxis2,
-                    value: cgEvent.getDoubleValueField(.scrollWheelEventDeltaAxis1)
-                )
-                cgEvent.setDoubleValueField(.scrollWheelEventDeltaAxis1, value: 0)
-
-                cgEvent.setIntegerValueField(
-                    .scrollWheelEventPointDeltaAxis2,
-                    value: cgEvent.getIntegerValueField(.scrollWheelEventPointDeltaAxis1)
-                )
-                cgEvent.setIntegerValueField(.scrollWheelEventPointDeltaAxis1, value: 0)
-
-                return NSEvent(cgEvent: cgEvent) ?? event
+                return eventBox.value
             }
+        }
+
+        private func transform(_ eventBox: MainThreadEvent) {
+            let event = eventBox.value
+            guard let view,
+                  let scrollView = view.enclosingScrollView else { return }
+
+            let point = scrollView.convert(event.locationInWindow, from: nil)
+            guard scrollView.bounds.contains(point) else { return }
+            guard abs(event.scrollingDeltaY) > abs(event.scrollingDeltaX) else { return }
+            guard let cgEvent = event.cgEvent?.copy() else { return }
+
+            cgEvent.setDoubleValueField(
+                .scrollWheelEventDeltaAxis2,
+                value: cgEvent.getDoubleValueField(.scrollWheelEventDeltaAxis1)
+            )
+            cgEvent.setDoubleValueField(.scrollWheelEventDeltaAxis1, value: 0)
+            cgEvent.setIntegerValueField(
+                .scrollWheelEventPointDeltaAxis2,
+                value: cgEvent.getIntegerValueField(.scrollWheelEventPointDeltaAxis1)
+            )
+            cgEvent.setIntegerValueField(.scrollWheelEventPointDeltaAxis1, value: 0)
+            eventBox.value = NSEvent(cgEvent: cgEvent) ?? event
         }
 
         func stopMonitoring() {
@@ -1540,6 +1567,7 @@ struct PulsingStatusDot: View {
 /// A polished badge indicating an update is available
 struct UpdateBadge: View {
     var accentColor: Color = BaseTheme.coralAccent
+    @Environment(\.appTheme) private var theme
 
     private var badgeGradient: LinearGradient {
         LinearGradient(
@@ -1570,7 +1598,7 @@ struct UpdateBadge: View {
 
             // Arrow up icon
             Image(systemName: "arrow.up")
-                .font(.system(size: 7, weight: .black))
+                .font(theme.font(size: 7, weight: .black))
                 .foregroundStyle(.white)
         }
     }
@@ -1595,18 +1623,18 @@ struct BedrockUsageCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 5) {
                         Image(systemName: "cloud.fill")
-                            .font(.system(size: 10, weight: .bold))
+                            .font(theme.font(size: 10, weight: .bold))
                             .foregroundStyle(ProviderVisualIdentityLookup.color(for: "bedrock", scheme: colorScheme))
 
                         Text("TODAY'S USAGE")
-                            .font(.system(size: 9, weight: .semibold, design: theme.fontDesign))
+                            .font(theme.font(size: 9, weight: .semibold))
                             .foregroundStyle(theme.textSecondary)
                             .tracking(0.5)
                     }
 
                     // Large cost number
                     Text(usage.formattedTotalCost)
-                        .font(.system(size: 36, weight: .bold, design: theme.fontDesign))
+                        .font(theme.font(size: 36, weight: .bold))
                         .foregroundStyle(theme.textPrimary)
                         .contentTransition(.numericText())
                 }
@@ -1629,14 +1657,14 @@ struct BedrockUsageCard: View {
                     ForEach(usage.modelsBySpend.prefix(3), id: \.model.id) { modelUsage in
                         HStack {
                             Text(modelUsage.model.displayName)
-                                .font(.system(size: 11, weight: .medium, design: theme.fontDesign))
+                                .font(theme.font(size: 11, weight: .medium))
                                 .foregroundStyle(theme.textSecondary)
                                 .lineLimit(1)
 
                             Spacer()
 
                             Text(modelUsage.formattedCost)
-                                .font(.system(size: 11, weight: .semibold, design: theme.fontDesign))
+                                .font(theme.font(size: 11, weight: .semibold))
                                 .foregroundStyle(theme.textPrimary)
                         }
                     }
@@ -1644,7 +1672,7 @@ struct BedrockUsageCard: View {
                     // Show "and X more" if more than 3 models
                     if usage.modelUsages.count > 3 {
                         Text("and \(usage.modelUsages.count - 3) more...")
-                            .font(.system(size: 10, weight: .medium, design: theme.fontDesign))
+                            .font(theme.font(size: 10, weight: .medium))
                             .foregroundStyle(theme.textTertiary)
                     }
                 }
@@ -1659,13 +1687,13 @@ struct BedrockUsageCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
                         Text("Daily Budget")
-                            .font(.system(size: 10, weight: .medium, design: theme.fontDesign))
+                            .font(theme.font(size: 10, weight: .medium))
                             .foregroundStyle(theme.textSecondary)
 
                         Spacer()
 
                         Text("\(Int(min(budgetPercent, 100)))% of \(budgetFormatted)")
-                            .font(.system(size: 10, weight: .semibold, design: theme.fontDesign))
+                            .font(theme.font(size: 10, weight: .semibold))
                             .foregroundStyle(budgetPercent > 90 ? theme.statusCritical : theme.textPrimary)
                     }
 
@@ -1686,10 +1714,10 @@ struct BedrockUsageCard: View {
             // Time period
             HStack(spacing: 3) {
                 Image(systemName: "clock.fill")
-                    .font(.system(size: 8))
+                    .font(theme.font(size: 8))
 
                 Text("Since \(formattedPeriodStart)")
-                    .font(.system(size: 9, weight: .medium, design: theme.fontDesign))
+                    .font(theme.font(size: 9, weight: .medium))
             }
             .foregroundStyle(theme.textTertiary)
         }
@@ -1736,15 +1764,15 @@ private struct StatPill: View {
     var body: some View {
         HStack(spacing: 4) {
             Image(systemName: icon)
-                .font(.system(size: 8, weight: .bold))
+                .font(theme.font(size: 8, weight: .bold))
                 .foregroundStyle(theme.textTertiary)
 
             Text(value)
-                .font(.system(size: 11, weight: .semibold, design: theme.fontDesign))
+                .font(theme.font(size: 11, weight: .semibold))
                 .foregroundStyle(theme.textPrimary)
 
             Text(label)
-                .font(.system(size: 9, weight: .medium, design: theme.fontDesign))
+                .font(theme.font(size: 9, weight: .medium))
                 .foregroundStyle(theme.textTertiary)
         }
         .padding(.horizontal, 8)

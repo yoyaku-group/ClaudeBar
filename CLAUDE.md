@@ -150,10 +150,15 @@ Sources/App/Theme/
     └── ChristmasTheme.swift    # Festive with snowfall
 ```
 
-**Adding a New Theme:**
+**Adding a New Built-in Theme:**
 1. Create `Sources/App/Theme/Themes/MyTheme.swift` implementing `AppThemeProvider`
 2. Register in `ThemeRegistry.registerBuiltInThemes()`
 3. Add case to `ThemeMode` enum in `Theme.swift`
+
+**Importing Terminal Themes:**
+Users can import `.itermcolors` files via Settings > Import. The pipeline:
+`ITermColorsParser` → `TerminalColorScheme` → `TerminalThemeGenerator` → `ImportedTerminalTheme`
+Files: `Sources/Infrastructure/TerminalImport/`. See `docs/architecture/THEME_DESIGN.md`.
 
 ### Adding a New AI Provider
 

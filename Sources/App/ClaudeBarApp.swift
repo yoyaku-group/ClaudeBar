@@ -57,6 +57,14 @@ struct ClaudeBarApp: App {
         // - HookSettingsRepository
         let settingsRepository = JSONSettingsRepository.shared
 
+        // Seed known Yoyaku Claude profiles so each isolated config directory
+        // (e.g. ~/.claude, ~/.claude-admin) appears as a separate account.
+        ClaudeBarApp.seedClaudeAccountsIfNeeded(settingsRepository: settingsRepository)
+        // Backfill email on accounts that were seeded before the resolver
+        // was wired (Ben 2026-08-19: dashboard couldn't tell which Claude
+        // account was at 0% because the email was missing).
+        ClaudeBarApp.backfillClaudeAccountEmailsIfNeeded(settingsRepository: settingsRepository)
+
         // Create all providers with their probes (rich domain models)
         // Each provider manages its own isEnabled state (persisted via ProviderSettingsRepository)
         // Each probe checks isAvailable() for credentials/prerequisites
@@ -66,7 +74,19 @@ struct ClaudeBarApp: App {
                 apiProbe: ClaudeAPIUsageProbe(),
                 passProbe: ClaudePassProbe(),
                 settingsRepository: settingsRepository,
-                dailyUsageAnalyzer: ClaudeDailyUsageAnalyzer()
+                dailyUsageAnalyzer: ClaudeDailyUsageAnalyzer(),
+                cliProbeFactory: { configDir in
+                    if let configDir {
+                        return ClaudeUsageProbe(configDirectory: configDir)
+                    }
+                    return ClaudeUsageProbe()
+                },
+                apiProbeFactory: { configDir in
+                    if let configDir {
+                        return ClaudeAPIUsageProbe(configDirectory: configDir)
+                    }
+                    return ClaudeAPIUsageProbe()
+                }
             ),
             CodexProvider(
                 rpcProbe: CodexUsageProbe(),
@@ -75,6 +95,30 @@ struct ClaudeBarApp: App {
             ),
             GeminiProvider(probe: GeminiUsageProbe(), settingsRepository: settingsRepository),
             AntigravityProvider(probe: AntigravityUsageProbe(), settingsRepository: settingsRepository),
+            // Ecosystem quota SSOT: Qwen (CGU-mandated manual quota — no API
+            // polling, ever) + any provider whose native probe is disabled.
+            // Natively-enabled providers are skipped so rows never duplicate.
+            // Phase 0c (2026-08-19): qwen_personal_pro → alibaba entry added so
+            // the LLMRouterProvider stops emitting its own qwen_personal_pro row
+            // when the native Alibaba probe is enabled. Without this, ClaudeBar
+            // shows the same Qwen plan twice: once via the LLM-router adapter
+            // and once via AlibabaUsageProbe (which currently fails on
+            // ConsoleNeedLogin). Cookie-based source (Phase 2b) is a separate
+            // concern — the skipSlugs entry alone fixes the duplicate today.
+            LLMRouterProvider(
+                probe: LLMRouterStateProbe(
+                    skipSlugs: Set([
+                        ("glm_pro", "zai"),
+                        ("minimax_max", "minimax"),
+                        ("kimi", "kimi"),
+                        ("bedrock", "bedrock"),
+                        ("qwen_personal_pro", "alibaba"),
+                    ]
+                    .filter { settingsRepository.isEnabled(forProvider: $0.1, defaultValue: true) }
+                    .map(\.0))
+                ),
+                settingsRepository: settingsRepository
+            ),
             ZaiProvider(
                 probe: ZaiUsageProbe(settingsRepository: settingsRepository),
                 settingsRepository: settingsRepository
@@ -246,6 +290,93 @@ struct ClaudeBarApp: App {
             }
         default:
             break
+        }
+    }
+
+    /// Detects isolated Claude config directories and registers them as
+    /// separate Claude accounts. Only runs when no Claude accounts are
+    /// currently configured, to avoid overwriting user edits.
+    static func seedClaudeAccountsIfNeeded(settingsRepository: any MultiAccountSettingsRepository) {
+        guard settingsRepository.accounts(forProvider: "claude").isEmpty else { return }
+
+        let home = NSHomeDirectory()
+        let fm = FileManager.default
+
+        var candidates: [(accountId: String, label: String, configDir: String, email: String?)] = []
+
+        // Default config at ~/.claude.json (CLAUDE_CONFIG_DIR unset).
+        let defaultJson = (home as NSString).appendingPathComponent(".claude.json")
+        if fm.fileExists(atPath: defaultJson) {
+            let resolver = ClaudeAccountInfoResolver(configURL: URL(fileURLWithPath: defaultJson))
+            let email = resolver.resolve()?.email
+            candidates.append((
+                accountId: "default",
+                label: "Default",
+                configDir: home,
+                email: email
+            ))
+        }
+
+        // Isolated directories like ~/.claude-admin, ~/.claude-bedrock, etc.
+        if let homeContents = try? fm.contentsOfDirectory(atPath: home) {
+            for item in homeContents where item.hasPrefix(".claude-") {
+                let configDir = (home as NSString).appendingPathComponent(item)
+                let jsonPath = (configDir as NSString).appendingPathComponent(".claude.json")
+                guard fm.fileExists(atPath: jsonPath) else { continue }
+                let resolver = ClaudeAccountInfoResolver(configURL: URL(fileURLWithPath: jsonPath))
+                let email = resolver.resolve()?.email
+                let accountId = item.replacingOccurrences(of: ".claude-", with: "")
+                candidates.append((
+                    accountId: accountId,
+                    label: accountId.capitalized,
+                    configDir: configDir,
+                    email: email
+                ))
+            }
+        }
+
+        // Deduplicate by accountId, keeping the first match.
+        var seen = Set<String>()
+        for candidate in candidates {
+            guard !seen.contains(candidate.accountId) else { continue }
+            seen.insert(candidate.accountId)
+            settingsRepository.addAccount(
+                ProviderAccountConfig(
+                    accountId: candidate.accountId,
+                    label: candidate.label,
+                    email: candidate.email,
+                    probeConfig: ["claudeConfigDir": candidate.configDir]
+                ),
+                forProvider: "claude"
+            )
+        }
+    }
+
+    /// Backfills the `email` field on existing Claude accounts that were
+    /// seeded before the resolver was wired. Runs unconditionally on
+    /// every startup — cheap (one file read per account) and idempotent.
+    /// Skips accounts that already have an email. Resolves via
+    /// `ClaudeAccountInfoResolver` against `<configDir>/.claude.json`
+    /// (or `~/.claude.json` for the default account where configDir == HOME).
+    /// Ben 2026-08-19: needed to tell which Claude account was at 0%.
+    static func backfillClaudeAccountEmailsIfNeeded(settingsRepository: any MultiAccountSettingsRepository) {
+        for config in settingsRepository.accounts(forProvider: "claude") {
+            guard config.email == nil else { continue }
+            guard let configDir = config.probeConfig["claudeConfigDir"] else { continue }
+            let jsonPath = (configDir as NSString).appendingPathComponent(".claude.json")
+            guard FileManager.default.fileExists(atPath: jsonPath) else { continue }
+            let resolver = ClaudeAccountInfoResolver(configURL: URL(fileURLWithPath: jsonPath))
+            guard let email = resolver.resolve()?.email else { continue }
+            settingsRepository.updateAccount(
+                ProviderAccountConfig(
+                    accountId: config.accountId,
+                    label: config.label,
+                    email: email,
+                    organization: config.organization,
+                    probeConfig: config.probeConfig
+                ),
+                forProvider: "claude"
+            )
         }
     }
 

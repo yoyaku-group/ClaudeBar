@@ -50,6 +50,18 @@ public protocol AppSettingsRepository: Sendable {
     func overviewModeEnabled() -> Bool
     func setOverviewModeEnabled(_ enabled: Bool)
 
+    /// Which window's percentage drives the overview dashboard (R11 selector).
+    func overviewWindowFilter() -> OverviewWindowFilter
+    func setOverviewWindowFilter(_ filter: OverviewWindowFilter)
+
+    /// Overview dashboard row ordering.
+    func overviewSort() -> OverviewSort
+    func setOverviewSort(_ sort: OverviewSort)
+
+    /// What the menu-bar glyph shows (text / running cat / both).
+    func menuBarGlyphMode() -> MenuBarGlyphMode
+    func setMenuBarGlyphMode(_ mode: MenuBarGlyphMode)
+
     // MARK: - Background Sync
 
     func backgroundSyncEnabled() -> Bool

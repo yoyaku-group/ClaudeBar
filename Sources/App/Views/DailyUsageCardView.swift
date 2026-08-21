@@ -18,11 +18,11 @@ struct DailyUsageCardView: View {
             HStack(alignment: .top, spacing: 0) {
                 HStack(spacing: 5) {
                     Image(systemName: metric.iconName)
-                        .font(.system(size: 9, weight: .bold))
+                        .font(theme.font(size: 9, weight: .bold))
                         .foregroundStyle(metric.themeColor(for: theme))
 
                     Text(metric.label.uppercased())
-                        .font(.system(size: 8, weight: .medium, design: theme.fontDesign))
+                        .font(theme.font(size: 8, weight: .medium))
                         .foregroundStyle(theme.textSecondary)
                         .tracking(0.3)
                 }
@@ -33,14 +33,14 @@ struct DailyUsageCardView: View {
             // Large value display
             HStack(alignment: .firstTextBaseline) {
                 Text(primaryValue)
-                    .font(.system(size: 24, weight: .bold, design: theme.fontDesign))
+                    .font(theme.font(size: 24, weight: .bold))
                     .foregroundStyle(theme.textPrimary)
                     .contentTransition(.numericText())
 
                 Spacer()
 
                 Text(metric.unitLabel)
-                    .font(.system(size: 11, weight: .medium, design: theme.fontDesign))
+                    .font(theme.font(size: 11, weight: .medium))
                     .foregroundStyle(theme.textTertiary)
             }
 
@@ -74,10 +74,10 @@ struct DailyUsageCardView: View {
             if let deltaText = formattedDelta {
                 HStack(spacing: 3) {
                     Image(systemName: "arrow.triangle.swap")
-                        .font(.system(size: 7))
+                        .font(theme.font(size: 7))
 
                     Text(deltaText)
-                        .font(.system(size: 8, weight: .medium, design: theme.fontDesign))
+                        .font(theme.font(size: 8, weight: .medium))
                 }
                 .foregroundStyle(deltaColor)
                 .lineLimit(1)

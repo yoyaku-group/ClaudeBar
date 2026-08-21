@@ -15,16 +15,23 @@ public struct SessionEvent: Sendable, Equatable, Codable {
     /// When this event was received
     public let receivedAt: Date
 
+    /// How the session started, when Claude Code reports it — "fork" marks a
+    /// session forked from another (surfaced as a "Session forked" timeline
+    /// entry).
+    public let source: String?
+
     public init(
         sessionId: String,
         eventName: EventName,
         cwd: String,
-        receivedAt: Date = Date()
+        receivedAt: Date = Date(),
+        source: String? = nil
     ) {
         self.sessionId = sessionId
         self.eventName = eventName
         self.cwd = cwd
         self.receivedAt = receivedAt
+        self.source = source
     }
 
     /// Whether this event originates from ClaudeBar's own background quota probe.
@@ -52,5 +59,9 @@ public struct SessionEvent: Sendable, Equatable, Codable {
         /// Used to revive a session out of `.stopped` so the indicator tracks
         /// real activity instead of sticking on the end-of-turn `Stop`.
         case userPromptSubmit = "UserPromptSubmit"
+        /// Compaction started (context about to be summarized).
+        case preCompact = "PreCompact"
+        /// Compaction finished — context pressure just released.
+        case postCompact = "PostCompact"
     }
 }

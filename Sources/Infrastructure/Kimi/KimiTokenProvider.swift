@@ -1,5 +1,4 @@
 import Foundation
-import SweetCookieKit
 import Domain
 
 /// Protocol for resolving Kimi authentication tokens.
@@ -8,16 +7,15 @@ public protocol KimiTokenProviding: Sendable {
     func resolveToken() throws -> String
 }
 
-/// Resolves Kimi authentication token from environment variable or browser cookies.
+/// Resolves the legacy direct-Kimi authentication token from the environment.
 ///
-/// Resolution order:
-/// 1. `KIMI_AUTH_TOKEN` environment variable
-/// 2. `kimi-auth` cookie from browser cookie stores (via SweetCookieKit)
+/// YOYAKU quota reads are supplied by llm-router. Keeping this bounded fallback
+/// supports upstream/manual profiles without requiring a browser-cookie package
+/// whose current releases require a newer Swift toolchain than the app.
 public struct KimiCookieTokenProvider: KimiTokenProviding {
     public init() {}
 
     public func resolveToken() throws -> String {
-        // 1. Check environment variable
         if let envToken = ProcessInfo.processInfo.environment["KIMI_AUTH_TOKEN"],
            !envToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         {
@@ -25,39 +23,9 @@ public struct KimiCookieTokenProvider: KimiTokenProviding {
             return envToken
         }
 
-        // 2. Try extracting from browser cookies
-        if let browserToken = fetchFromBrowser() {
-            AppLog.probes.debug("Kimi: Using token from browser cookie")
-            return browserToken
-        }
-
-        AppLog.probes.error("Kimi: No authentication token found")
-        throw ProbeError.authenticationRequired
-    }
-
-    private func fetchFromBrowser() -> String? {
-        let cookieClient = BrowserCookieClient()
-        let query = BrowserCookieQuery(
-            domains: ["www.kimi.com", "kimi.com"],
-            domainMatch: .suffix,
-            includeExpired: false
+        AppLog.probes.error(
+            "Kimi: KIMI_AUTH_TOKEN is missing; YOYAKU profiles should authenticate the Kimi CLI for llm-router instead."
         )
-
-        for browser in Browser.defaultImportOrder {
-            do {
-                let stores = try cookieClient.records(matching: query, in: browser)
-                for store in stores {
-                    let cookies = store.cookies(origin: query.origin)
-                    if let auth = cookies.first(where: { $0.name == "kimi-auth" }),
-                       !auth.value.isEmpty
-                    {
-                        return auth.value
-                    }
-                }
-            } catch {
-                continue
-            }
-        }
-        return nil
+        throw ProbeError.authenticationRequired
     }
 }
