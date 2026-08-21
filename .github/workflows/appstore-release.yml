@@ -21,10 +21,6 @@ name: App Store Release
 on:
   workflow_dispatch:
     inputs:
-      version:
-        description: 'Version string (e.g. 1.2.0)'
-        required: true
-        type: string
       build_number:
         description: 'Build number (leave blank to use run number)'
         required: false
@@ -39,6 +35,10 @@ on:
         required: false
         type: boolean
         default: false
+      expected_sha:
+        description: 'Exact commit to release (required by gha-safe)'
+        required: true
+        type: string
 
 env:
   APP_NAME: ClaudeBar
@@ -50,11 +50,34 @@ env:
 jobs:
   appstore-release:
     name: Build, Upload & (optionally) Submit
-    runs-on: macos-15
+    runs-on: [self-hosted, macos, arm64, yoyaku-macos-ci]
+    timeout-minutes: 120
+
+    concurrency:
+      group: claudebar-appstore-release
+      cancel-in-progress: false
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Verify requested commit and version
+        id: release
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          set -euo pipefail
+          RESOLVED_SHA="$(git rev-parse HEAD)"
+          if ! [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]] || [[ "$RESOLVED_SHA" != "$EXPECTED_SHA" ]]; then
+            echo "::error::Checkout $RESOLVED_SHA does not match expected_sha $EXPECTED_SHA"
+            exit 1
+          fi
+          VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Sources/App/Info.plist)"
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+(\.[a-zA-Z0-9]+)*)?$ ]]; then
+            echo "::error::Invalid checked-in version: $VERSION"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Setup Swift
         uses: SwiftyLab/setup-swift@latest
@@ -78,13 +101,13 @@ jobs:
         id: build
         run: |
           BUILD_NUMBER="${{ inputs.build_number || github.run_number }}"
-          echo "build_number=$BUILD_NUMBER" >> $GITHUB_OUTPUT
-          echo "Build: ${{ inputs.version }} ($BUILD_NUMBER)"
+          echo "build_number=$BUILD_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "Build: ${{ steps.release.outputs.version }} ($BUILD_NUMBER)"
 
       - name: Update Info.plist Version
         run: |
           INFO_PLIST="Sources/App/Info.plist"
-          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${{ inputs.version }}" "$INFO_PLIST"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${{ steps.release.outputs.version }}" "$INFO_PLIST"
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${{ steps.build.outputs.build_number }}" "$INFO_PLIST"
 
       - name: Install Dependencies & Generate Xcode Project
@@ -122,11 +145,14 @@ jobs:
             -T /usr/bin/security \
             -f pkcs12
 
+          # shellcheck disable=SC2046
           security list-keychain -d user -s "$KEYCHAIN_PATH" $(security list-keychain -d user | xargs)
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" 2>&1 || true
 
-          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> $GITHUB_ENV
-          echo "KEYCHAIN_PASSWORD=$KEYCHAIN_PASSWORD" >> $GITHUB_ENV
+          {
+            echo "KEYCHAIN_PATH=$KEYCHAIN_PATH"
+            echo "KEYCHAIN_PASSWORD=$KEYCHAIN_PASSWORD"
+          } >> "$GITHUB_ENV"
 
       - name: Install asc CLI
         run: brew tap tddworks/tap && brew install asccli
@@ -137,14 +163,16 @@ jobs:
         env:
           ASC_PRIVATE_KEY_B64: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
         run: |
-          echo "ASC_KEY_ID=${{ secrets.APP_STORE_CONNECT_KEY_ID }}" >> $GITHUB_ENV
-          echo "ASC_ISSUER_ID=${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}" >> $GITHUB_ENV
+          {
+            echo "ASC_KEY_ID=${{ secrets.APP_STORE_CONNECT_KEY_ID }}"
+            echo "ASC_ISSUER_ID=${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}"
+          } >> "$GITHUB_ENV"
           DECODED_KEY=$(echo "$ASC_PRIVATE_KEY_B64" | base64 -D)
           {
             echo 'ASC_PRIVATE_KEY<<EOF'
             printf '%s\n' "$DECODED_KEY"
             echo 'EOF'
-          } >> $GITHUB_ENV
+          } >> "$GITHUB_ENV"
 
       - name: Install Provisioning Profile
         # ASC credentials are set globally by "Setup ASC credentials" — no extra secret needed.
@@ -234,7 +262,7 @@ jobs:
             ls -la "$RUNNER_TEMP/Export/"
             exit 1
           fi
-          echo "PKG_FILE=$PKG_FILE" >> $GITHUB_ENV
+          echo "PKG_FILE=$PKG_FILE" >> "$GITHUB_ENV"
           echo "Exported: $PKG_FILE"
 
       - name: Upload to App Store Connect
@@ -242,7 +270,7 @@ jobs:
           asc builds upload \
             --app-id "$APP_ID" \
             --file "$PKG_FILE" \
-            --version "${{ inputs.version }}" \
+            --version "${{ steps.release.outputs.version }}" \
             --build-number "${{ steps.build.outputs.build_number }}" \
             --wait
 
@@ -258,7 +286,7 @@ jobs:
             asc builds list --app-id "$APP_ID" | jq '.data[] | {id, version, processingState}'
             exit 1
           fi
-          echo "BUILD_ID=$BUILD_ID" >> $GITHUB_ENV
+          echo "BUILD_ID=$BUILD_ID" >> "$GITHUB_ENV"
           echo "Build ID: $BUILD_ID"
 
       - name: Distribute to TestFlight

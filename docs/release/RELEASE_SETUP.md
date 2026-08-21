@@ -4,15 +4,24 @@ This guide explains how to set up the GitHub secrets required for automated rele
 
 ## Overview
 
-The release workflow requires **5 secrets** to be configured in GitHub:
+The GitHub release workflow requires one repository secret:
 
 | Secret | Description |
 |--------|-------------|
-| `APPLE_CERTIFICATE_P12` | Developer ID Application certificate (base64) |
-| `APPLE_CERTIFICATE_PASSWORD` | Password for the .p12 file |
-| `APP_STORE_CONNECT_API_KEY_P8` | App Store Connect API key (base64) |
-| `APP_STORE_CONNECT_KEY_ID` | API Key ID |
-| `APP_STORE_CONNECT_ISSUER_ID` | Issuer ID |
+| `SPARKLE_EDDSA_PRIVATE_KEY` | Private key matching `SUPublicEDKey` |
+
+Apple signing material stays in the trusted Mac runner's Keychain instead of
+being duplicated into GitHub. The runner must expose a `Developer ID
+Application` identity and the notarytool profile `YOYAKU-NOTARY`.
+
+The workflow also requires the repository-authorized self-hosted runner labels
+`self-hosted`, `macos`, `arm64`, and `yoyaku-macos-ci`. GitHub-hosted runners
+are deliberately unsupported so the organization Actions budget stays at
+zero.
+
+The five App Store Connect/MAS secrets documented by
+`appstore-release.yml` are separate and are not consumed by the direct GitHub
+release workflow.
 
 ## Prerequisites
 
@@ -25,7 +34,10 @@ The release workflow requires **5 secrets** to be configured in GitHub:
 
 ## Part 1: Developer ID Application Certificate
 
-This certificate is used to sign the app for distribution outside the Mac App Store.
+This certificate is used to sign the app for distribution outside the Mac App
+Store. It must be installed in the self-hosted runner's login Keychain. The P12
+steps below are for backup or runner migration; the release workflow does not
+upload the P12 to GitHub.
 
 ### Step 1.1: Create a Certificate Signing Request (CSR)
 
@@ -75,16 +87,15 @@ base64 -i /path/to/certificate.p12 | tr -d '\n' | pbcopy
 
 This copies the base64-encoded certificate to your clipboard.
 
-### Step 1.6: Add to GitHub Secrets
+### Step 1.6: Verify the trusted runner
 
-1. Go to your GitHub repository → **Settings** → **Secrets and variables** → **Actions**
-2. Click **New repository secret**
-3. Add:
-   - **Name**: `APPLE_CERTIFICATE_P12`
-   - **Value**: Paste the base64 string (Cmd+V)
-4. Add another secret:
-   - **Name**: `APPLE_CERTIFICATE_PASSWORD`
-   - **Value**: The password you entered when exporting the .p12
+```bash
+security find-identity -v -p codesigning
+xcrun notarytool history --keychain-profile YOYAKU-NOTARY
+```
+
+Both commands must succeed under the same macOS account that runs the GitHub
+Actions service.
 
 ---
 
@@ -159,23 +170,20 @@ tail -1 /path/to/AuthKey_XXXXXX.p8
 # Should output: -----END PRIVATE KEY-----
 ```
 
-### Verify GitHub Secrets
+### Verify GitHub Release Secret
 
 Your repository secrets should look like:
 
 ![GitHub Secrets](https://docs.github.com/assets/images/help/repository/repository-settings-secrets.png)
 
-- `APPLE_CERTIFICATE_P12` ✓
-- `APPLE_CERTIFICATE_PASSWORD` ✓
-- `APP_STORE_CONNECT_API_KEY_P8` ✓
-- `APP_STORE_CONNECT_KEY_ID` ✓
-- `APP_STORE_CONNECT_ISSUER_ID` ✓
+- `SPARKLE_EDDSA_PRIVATE_KEY` ✓
 
 ---
 
 ## Part 4: Create a Release
 
-Once all secrets are configured, follow this workflow to create a release.
+Once all secrets and the self-hosted runner are configured, follow this
+workflow to create a release.
 
 ### Step 1: Write Release Notes in CHANGELOG.md
 
@@ -213,7 +221,29 @@ git commit -m "docs: add release notes for v1.0.0"
 git push origin main
 ```
 
-### Step 3: Create and Push the Tag
+### Step 3: Dispatch the Commit-Bound Release
+
+The checked-in `CFBundleShortVersionString` and matching CHANGELOG section are
+authoritative. Dispatch through the guarded wrapper with the exact `main` SHA:
+
+```bash
+RELEASE_SHA="$(git rev-parse main)"
+gha-safe dispatch \
+  --repo yoyaku-group/ClaudeBar \
+  --workflow release.yml \
+  --ref main \
+  --expected-sha "$RELEASE_SHA" \
+  --apply
+```
+
+The workflow re-resolves `main`, refuses any SHA drift, creates the matching
+tag and GitHub release, signs and notarizes the app and DMG, emits checksums and
+provenance, and publishes the signed Sparkle appcast.
+
+Tag pushes remain supported for maintainers, but are subject to the same exact
+`main`, version, credentials, signing, and provenance checks.
+
+### Legacy tag examples
 
 **Option A: Tag-based Release**
 
@@ -231,12 +261,8 @@ git tag v2.0.0-alpha.1
 git tag v2.0.0-rc.1
 ```
 
-**Option B: Manual Release (workflow_dispatch)**
-
-1. Go to **Actions** → **Release** workflow
-2. Click **Run workflow**
-3. Enter the version (e.g., `1.0.0` or `1.0.0-beta.1`)
-4. Click **Run workflow**
+Do not use the GitHub UI's generic **Run workflow** button: `gha-safe` performs
+the organization budget check and supplies the immutable `expected_sha` input.
 
 ### How Release Notes Flow
 

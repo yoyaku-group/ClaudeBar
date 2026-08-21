@@ -17,6 +17,7 @@ ED_SIGNATURE="$4"
 FILE_SIZE="$5"
 RELEASE_NOTES="${6:-Bug fixes and improvements.}"
 CHANNEL="${7:-}"  # Optional: "beta" for pre-release versions
+RELEASE_REPOSITORY="${GITHUB_REPOSITORY:-tddworks/ClaudeBar}"
 PUB_DATE=$(date -R)
 
 mkdir -p docs
@@ -112,7 +113,7 @@ ${CHANNEL_TAG}
             <description><![CDATA[<h2>ClaudeBar ${VERSION}</h2>
 <p><em>Released ${DISPLAY_DATE}</em></p>
 ${HTML_NOTES}
-<p><a href="https://github.com/tddworks/ClaudeBar/releases/tag/v${VERSION}">View full release notes</a></p>
+<p><a href="https://github.com/${RELEASE_REPOSITORY}/releases/tag/v${VERSION}">View full release notes</a></p>
 ]]></description>
             <enclosure url="${DOWNLOAD_URL}" length="${FILE_SIZE}" type="application/octet-stream" sparkle:edSignature="${ED_SIGNATURE}"/>
         </item>

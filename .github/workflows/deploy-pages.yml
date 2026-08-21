@@ -19,6 +19,11 @@ on:
       - 'docs/**'
       - '.github/workflows/deploy-pages.yml'
   workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: 'Exact commit to deploy (required by gha-safe)'
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -32,16 +37,30 @@ concurrency:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, yoyaku-linux-ci]
+    timeout-minutes: 15
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
+      - name: Verify requested commit
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          set -euo pipefail
+          RESOLVED_SHA="$(git rev-parse HEAD)"
+          if ! [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]] || [[ "$RESOLVED_SHA" != "$EXPECTED_SHA" ]]; then
+            echo "::error::Checkout $RESOLVED_SHA does not match expected_sha $EXPECTED_SHA"
+            exit 1
+          fi
+
       - name: Preserve the live appcast
         run: |
-          LIVE="https://tddworks.github.io/ClaudeBar/appcast.xml"
+          REPOSITORY_NAME="${GITHUB_REPOSITORY#*/}"
+          LIVE="https://${GITHUB_REPOSITORY_OWNER}.github.io/${REPOSITORY_NAME}/appcast.xml"
 
           if ! curl -fsSL --retry 3 --retry-delay 2 "$LIVE" -o /tmp/appcast.xml; then
             echo "::error::Could not fetch the live appcast from $LIVE."

@@ -5,16 +5,38 @@ on:
   pull_request:
     branches: [main, develop]
   workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: 'Exact commit to build (required by gha-safe)'
+        required: true
+        type: string
 
 
 jobs:
   build:
     name: Build and Verify
-    runs-on: macos-26
+    runs-on: [self-hosted, macos, arm64, yoyaku-macos-ci]
+    timeout-minutes: 45
+
+    concurrency:
+      group: claudebar-build-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Verify requested commit
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          set -euo pipefail
+          RESOLVED_SHA="$(git rev-parse HEAD)"
+          if ! [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]] || [[ "$RESOLVED_SHA" != "$EXPECTED_SHA" ]]; then
+            echo "::error::Checkout $RESOLVED_SHA does not match expected_sha $EXPECTED_SHA"
+            exit 1
+          fi
 
       # No explicit Swift toolchain setup: use the runner's bundled Xcode, the
       # same toolchain Tuist builds its macro prebuilts (SwiftSyntax) against.
@@ -23,7 +45,17 @@ jobs:
       # created for incompatible target"). Mirrors the passing tests.yml.
 
       - name: Install Tuist
-        run: brew install --cask tuist
+        run: command -v tuist >/dev/null || brew install tuist
+
+      - name: Cache Tuist
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/tuist
+            .tuist-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-tuist-${{ hashFiles('Project.swift', 'Tuist.swift', 'Package.swift', 'Tuist/Package.swift') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-tuist-
 
       - name: Install Dependencies
         run: tuist install

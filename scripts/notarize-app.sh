@@ -8,6 +8,7 @@
 #   ./scripts/notarize-app.sh ClaudeBar.app ~/AuthKey_ABC123.p8 ABC123 12345678-1234-1234-1234-123456789012
 #
 # Environment variables (alternative to arguments):
+#   NOTARYTOOL_PROFILE              - Keychain profile on a trusted runner
 #   APP_STORE_CONNECT_API_KEY_PATH - Path to .p8 file
 #   APP_STORE_CONNECT_KEY_ID       - Key ID
 #   APP_STORE_CONNECT_ISSUER_ID    - Issuer ID
@@ -25,6 +26,7 @@ APP_BUNDLE="$1"
 API_KEY_PATH="${2:-$APP_STORE_CONNECT_API_KEY_PATH}"
 KEY_ID="${3:-$APP_STORE_CONNECT_KEY_ID}"
 ISSUER_ID="${4:-$APP_STORE_CONNECT_ISSUER_ID}"
+KEYCHAIN_PROFILE="${NOTARYTOOL_PROFILE:-}"
 
 if [ -z "$APP_BUNDLE" ]; then
     echo "Usage: $0 <app-bundle> [api-key-path] [key-id] [issuer-id]"
@@ -47,15 +49,21 @@ if [ ! -d "$APP_BUNDLE" ]; then
     exit 1
 fi
 
-if [ -z "$API_KEY_PATH" ] || [ -z "$KEY_ID" ] || [ -z "$ISSUER_ID" ]; then
+if [ -z "$KEYCHAIN_PROFILE" ] && { [ -z "$API_KEY_PATH" ] || [ -z "$KEY_ID" ] || [ -z "$ISSUER_ID" ]; }; then
     echo -e "${RED}ERROR: Missing API credentials${NC}"
-    echo "Provide via arguments or environment variables"
+    echo "Provide NOTARYTOOL_PROFILE or API credentials via arguments/environment"
     exit 1
 fi
 
-if [ ! -f "$API_KEY_PATH" ]; then
+if [ -z "$KEYCHAIN_PROFILE" ] && [ ! -f "$API_KEY_PATH" ]; then
     echo -e "${RED}ERROR: API key file not found: $API_KEY_PATH${NC}"
     exit 1
+fi
+
+if [ -n "$KEYCHAIN_PROFILE" ]; then
+    NOTARY_AUTH=(--keychain-profile "$KEYCHAIN_PROFILE")
+else
+    NOTARY_AUTH=(--key "$API_KEY_PATH" --key-id "$KEY_ID" --issuer "$ISSUER_ID")
 fi
 
 APP_NAME=$(basename "$APP_BUNDLE" .app)
@@ -69,7 +77,11 @@ echo "  Notarizing $APP_NAME"
 echo "========================================"
 echo ""
 echo "App Bundle: $APP_BUNDLE"
-echo "Key ID:     $KEY_ID"
+if [ -n "$KEYCHAIN_PROFILE" ]; then
+    echo "Profile:    $KEYCHAIN_PROFILE"
+else
+    echo "Key ID:     $KEY_ID"
+fi
 echo ""
 
 # Create ZIP for notarization
@@ -87,9 +99,7 @@ RESULT_FILE="$TEMP_DIR/result.json"
 
 set +e
 xcrun notarytool submit "$ZIP_FILE" \
-    --key "$API_KEY_PATH" \
-    --key-id "$KEY_ID" \
-    --issuer "$ISSUER_ID" \
+    "${NOTARY_AUTH[@]}" \
     --output-format json \
     --wait \
     --timeout 30m > "$RESULT_FILE" 2>&1
@@ -116,9 +126,7 @@ if [ "$STATUS" != "Accepted" ]; then
         echo "=== Fetching detailed log ==="
         LOG_FILE="$TEMP_DIR/log.json"
         xcrun notarytool log "$SUBMISSION_ID" \
-            --key "$API_KEY_PATH" \
-            --key-id "$KEY_ID" \
-            --issuer "$ISSUER_ID" \
+            "${NOTARY_AUTH[@]}" \
             "$LOG_FILE" 2>&1 || true
 
         if [ -f "$LOG_FILE" ]; then

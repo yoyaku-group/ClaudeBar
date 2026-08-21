@@ -17,9 +17,9 @@
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0.0</string>
+    <string>2.0.0</string>
     <key>CFBundleVersion</key>
-    <string>1</string>
+    <string>20000</string>
     <key>LSApplicationCategoryType</key>
     <string>public.app-category.utilities</string>
     <key>LSMinimumSystemVersion</key>
@@ -31,7 +31,7 @@
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
     <key>SUFeedURL</key>
-    <string>https://benjaminbelaga.github.io/ClaudeBar/appcast.xml</string>
+    <string>https://yoyaku-group.github.io/ClaudeBar/appcast.xml</string>
     <key>SUPublicEDKey</key>
     <string>uMWIyib/6Sa4FZiyL3c5eyz7JmiJw4Tfa1DVnNTCob0=</string>
     <key>SUEnableAutomaticChecks</key>

@@ -11,6 +11,11 @@ on:
     paths:
       - '.all-contributorsrc'
   workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: 'Exact commit to render (required by gha-safe)'
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -21,9 +26,22 @@ concurrency:
 
 jobs:
   sync:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, yoyaku-linux-ci]
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+
+      - name: Verify requested commit
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          set -euo pipefail
+          RESOLVED_SHA="$(git rev-parse HEAD)"
+          if ! [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]] || [[ "$RESOLVED_SHA" != "$EXPECTED_SHA" ]]; then
+            echo "::error::Checkout $RESOLVED_SHA does not match expected_sha $EXPECTED_SHA"
+            exit 1
+          fi
 
       - name: Render landing-page grid
         run: python3 scripts/sync-contributors.py

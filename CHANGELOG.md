@@ -9,6 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.0.0] - 2026-08-21
+
+### Added
+- Native multi-account quota rows for Claude and every other routed provider,
+  including account-scoped stale, missing, and authentication errors.
+- A strict, cached `llm-router` snapshot client with schema-v2 validation,
+  concurrent refresh coalescing, and stale last-good fallback.
+- Developer ID signing, Apple notarization, GitHub artifact attestations, and a
+  commit-bound provenance manifest in the zero-cost self-hosted release path.
+
+### Changed
+- `llm-router` is now the only quota source for Claude, Codex, Kimi, Qwen, GLM,
+  MiniMax, Bedrock, and local capacity in the YOYAKU build.
+- Router wire fractions are converted from `0...1` to ClaudeBar's `0...100`
+  display model exactly once at the provider boundary.
+- The Sparkle feed now targets the YOYAKU GitHub Pages deployment.
+
+### Removed
+- Direct quota probes for the eight router-owned providers and the obsolete
+  aggregate llm-router card.
+
+---
+
 ## [0.4.81] - 2026-08-21
 
 ### Changed

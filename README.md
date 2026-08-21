@@ -241,7 +241,8 @@ See `.claude/skills/add-provider/SKILL.md` for details and `AntigravityUsageProb
 
 ## Releasing
 
-Releases are automated via GitHub Actions. Push a version tag to create a new release.
+Releases are automated on the zero-cost YOYAKU macOS runner and are bound to an
+exact `main` commit through `gha-safe`.
 
 **For detailed setup instructions, see [docs/release/RELEASE_SETUP.md](docs/release/RELEASE_SETUP.md).**
 
@@ -250,32 +251,29 @@ Releases are automated via GitHub Actions. Push a version tag to create a new re
 The workflow uses Tuist to generate the Xcode project:
 
 ```
-Tag v1.0.0 → Update Info.plist → tuist generate → xcodebuild → Sign & Notarize → GitHub Release
+gha-safe + exact SHA → tuist generate → xcodebuild → Sign & Notarize → Provenance → GitHub Release
 ```
 
 Version is set in `Sources/App/Info.plist` and flows through to Sparkle auto-updates.
 
 ### Quick Start
 
-1. **Configure GitHub Secrets** (see [full guide](docs/release/RELEASE_SETUP.md)):
+1. **Configure the release authority** (see [full guide](docs/release/RELEASE_SETUP.md)):
 
-   | Secret | Description |
-   |--------|-------------|
-   | `APPLE_CERTIFICATE_P12` | Developer ID certificate (base64) |
-   | `APPLE_CERTIFICATE_PASSWORD` | Password for .p12 |
-   | `APP_STORE_CONNECT_API_KEY_P8` | API key (base64) |
-   | `APP_STORE_CONNECT_KEY_ID` | Key ID |
-   | `APP_STORE_CONNECT_ISSUER_ID` | Issuer ID |
+   - GitHub secret `SPARKLE_EDDSA_PRIVATE_KEY`
+   - Developer ID identity in the trusted runner's login Keychain
+   - notarytool Keychain profile `YOYAKU-NOTARY`
 
 2. **Verify your certificate**:
    ```bash
    ./scripts/verify-p12.sh /path/to/certificate.p12
    ```
 
-3. **Create a release**:
+3. **Create a release from the exact checked-in version on `main`**:
    ```bash
-   git tag v1.0.0
-   git push origin v1.0.0
+   RELEASE_SHA="$(git rev-parse main)"
+   gha-safe dispatch --repo yoyaku-group/ClaudeBar --workflow release.yml \
+     --ref main --expected-sha "$RELEASE_SHA" --apply
    ```
 
 The workflow will automatically build, sign, notarize, and publish to GitHub Releases.
