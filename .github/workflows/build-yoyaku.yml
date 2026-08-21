@@ -4,6 +4,11 @@ on:
   # Manual-only (rules/02 cost discipline): a macOS runner minute bills at 10x a
   # Linux one — no per-push builds. Trigger from the Actions tab when needed.
   workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Exact 40-character commit SHA to build
+        required: true
+        type: string
 
 env:
   APP_NAME: ClaudeBar
@@ -16,6 +21,23 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.expected_sha }}
+
+      - name: Verify exact source revision
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          if [[ ! "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::expected_sha must be a full lowercase commit SHA"
+            exit 1
+          fi
+
+          ACTUAL_SHA="$(git rev-parse HEAD)"
+          if [[ "$ACTUAL_SHA" != "$EXPECTED_SHA" ]]; then
+            echo "::error::Checked out $ACTUAL_SHA, expected $EXPECTED_SHA"
+            exit 1
+          fi
 
       # Use the Swift toolchain bundled with the runner's Xcode. Tuist macro
       # prebuilts must match that toolchain.
