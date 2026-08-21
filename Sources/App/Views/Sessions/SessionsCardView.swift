@@ -80,27 +80,21 @@ struct SessionsCardView: View {
 
     @ViewBuilder
     private func timelineRow(_ event: SessionEvent) -> some View {
-        let label: String
-        let icon: String
-        switch event.eventName {
+        let presentation: (label: String, icon: String) = switch event.eventName {
         case .preCompact:
-            label = "Compaction…"
-            icon = "arrow.down.circle"
+            ("Compaction…", "arrow.down.circle")
         case .postCompact:
-            label = "Compaction terminée"
-            icon = "checkmark.circle"
+            ("Compaction terminée", "checkmark.circle")
         case .sessionStart where event.source == "fork":
-            label = "Session forked"
-            icon = "arrow.triangle.branch"
+            ("Session forked", "arrow.triangle.branch")
         default:
-            label = event.eventName.rawValue
-            icon = "circle"
+            (event.eventName.rawValue, "circle")
         }
         HStack(spacing: 6) {
-            Image(systemName: icon)
+            Image(systemName: presentation.icon)
                 .font(theme.font(size: 9))
                 .foregroundStyle(theme.textTertiary)
-            Text(label)
+            Text(presentation.label)
                 .font(theme.font(size: 10, weight: .medium))
                 .foregroundStyle(theme.textSecondary)
             Spacer()
