@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       expected_sha:
-        description: 'Exact commit to build (required by gha-safe)'
+        description: Exact 40-character commit SHA to build
         required: true
         type: string
 
@@ -26,22 +26,26 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.expected_sha }}
 
-      - name: Verify requested commit
+      - name: Verify exact source revision
         env:
           EXPECTED_SHA: ${{ inputs.expected_sha }}
         run: |
-          set -euo pipefail
-          RESOLVED_SHA="$(git rev-parse HEAD)"
-          if ! [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]] || [[ "$RESOLVED_SHA" != "$EXPECTED_SHA" ]]; then
-            echo "::error::Checkout $RESOLVED_SHA does not match expected_sha $EXPECTED_SHA"
+          if [[ ! "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::expected_sha must be a full lowercase commit SHA"
             exit 1
           fi
 
-      # No explicit Swift toolchain setup: use the runner's bundled Xcode, the
-      # same toolchain Tuist builds its macro prebuilts (SwiftSyntax) against.
-      # Installing a separate toolchain via SwiftyLab/setup-swift drifted out of
-      # sync with those prebuilts and broke the build (same fix as release.yml).
+          ACTUAL_SHA="$(git rev-parse HEAD)"
+          if [[ "$ACTUAL_SHA" != "$EXPECTED_SHA" ]]; then
+            echo "::error::Checked out $ACTUAL_SHA, expected $EXPECTED_SHA"
+            exit 1
+          fi
+
+      # Use the Swift toolchain bundled with the runner's Xcode. Tuist macro
+      # prebuilts must match that toolchain.
 
       - name: Install Tuist
         run: command -v tuist >/dev/null || brew install tuist

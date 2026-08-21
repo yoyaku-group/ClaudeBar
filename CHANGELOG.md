@@ -32,6 +32,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.1.0-yoyaku] - 2026-03-21
+
+### Changed
+- Preserved the YOYAKU fork integration checkpoint from the pre-sync history.
+
+---
+
 ## [0.4.81] - 2026-08-21
 
 ### Changed
@@ -319,7 +326,79 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Bug fixes and improvements.
-## [1.1.0] - 2026-03-21
+
+---
+
+## [0.4.57] - 2026-03-23
+
+### Changed
+- Bug fixes and improvements.
+
+---
+
+## [0.4.56] - 2026-03-22
+
+### Added
+- Mistral provider backed by Vibe session logs for quota monitoring.
+
+### Fixed
+- Mistral probe now uses Vibe's `session_total_llm_tokens` and `session_cost` fields for accurate usage tracking.
+
+---
+
+## [0.4.55] - 2026-03-20
+
+### Changed
+- Bug fixes and improvements.
+
+---
+
+## [0.4.54] - 2026-03-20
+
+### Changed
+- Bug fixes and improvements.
+
+---
+
+## [0.4.53] - 2026-03-19
+
+### Fixed
+- **Claude account info empty on CLI v2.1.79+**: The Claude CLI now uses a tabbed TUI where account info (email, organization) is on the Status tab, not the Usage tab. The probe now reads account info from `~/.claude.json` (`oauthAccount`) as a fallback, so the account card displays correctly without extra CLI calls.
+
+### Refactored
+- **Extract `ClaudeAccountInfoResolver`**: Account info resolution logic extracted from `ClaudeUsageProbe` into a dedicated `ClaudeAccountInfoResolver` that reads `~/.claude.json` → `oauthAccount`. Introduced `AccountInfo` domain value object with `displayName`, `isEmpty`, and `initialLetter` computed properties. Improves SRP and testability — the probe now delegates account identity resolution instead of owning it.
+
+---
+
+## [0.4.52] - 2026-03-18
+
+### Changed
+- Bug fixes and improvements.
+
+---
+
+## [0.4.51] - 2026-03-17
+
+### Changed
+- Bug fixes and improvements.
+
+---
+
+## [0.4.50] - 2026-03-17
+
+### Added
+- **Extensions System**: Raycast-style user extensions for custom provider monitoring. Drop a folder with a `manifest.json` and probe scripts into `~/.claudebar/extensions/` to add your own provider. Each extension defines composable sections (`quotaGrid`, `metricsRow`, `dailyUsage`, `costUsage`, `statusBanner`, `healthCheck`) with per-section probe commands and independent refresh intervals. Probe scripts can be any language (bash, python, swift) — just output JSON to stdout. Extensions auto-register as providers with custom branding (icon, colors) and appear in the provider pills alongside built-in providers. See `docs/features/extensions.md` for the full spec and example.
+- **Built-in Health Check for Extensions**: Extensions can now define a `healthCheck` section with a URL endpoint — no probe script needed. ClaudeBar pings the URL and renders Status (UP/DOWN with HTTP code) and Latency cards automatically. Configure via `"probe": { "builtIn": "healthCheck", "url": "https://..." }` in `manifest.json`.
+
+---
+
+## [0.4.49] - 2026-03-17
+
+### Added
+- **Custom Web Card per Provider**: Configure a custom URL for any provider to display an embedded web page as an additional card below the quota cards. Useful for third-party dashboards like [claude.owo.nz](https://claude.owo.nz/). Set via Settings → Providers → Custom Card URL field. The page is rendered inline with WKWebView, scaled to fit the card, with an "open in browser" button.
+
+### Fixed
+- **SwiftTerm Metal duplicate build error**: Resolved the `Unexpected duplicate tasks: MetalLink` build failure caused by Tuist adding `Shaders.metal` to both Sources and Resources build phases. Fixed via `EXCLUDED_SOURCE_FILE_NAMES` in Tuist package settings, eliminating the need for the post-generation fix script.
 
 ---
 
@@ -928,6 +1007,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Automatic refresh every 5 minutes
 
 [Unreleased]: https://github.com/tddworks/ClaudeBar/compare/v0.4.81...HEAD
+[1.1.0-yoyaku]: https://github.com/yoyaku-group/ClaudeBar/tree/d41f845e5aa6dceed32076863bb808c4ff4ad57a
 [0.4.81]: https://github.com/tddworks/ClaudeBar/compare/v0.4.80...v0.4.81
 [0.4.80]: https://github.com/tddworks/ClaudeBar/compare/v0.4.79...v0.4.80
 [0.4.79]: https://github.com/tddworks/ClaudeBar/compare/v0.4.78...v0.4.79
