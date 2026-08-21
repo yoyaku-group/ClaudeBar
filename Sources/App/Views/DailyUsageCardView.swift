@@ -19,7 +19,7 @@ struct DailyUsageCardView: View {
                 HStack(spacing: 5) {
                     Image(systemName: metric.iconName)
                         .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(metric.color)
+                        .foregroundStyle(metric.themeColor(for: theme))
 
                     Text(metric.label.uppercased())
                         .font(.system(size: 8, weight: .medium, design: theme.fontDesign))
@@ -60,7 +60,7 @@ struct DailyUsageCardView: View {
 
                     RoundedRectangle(cornerRadius: 3)
                         .fill(LinearGradient(
-                            colors: [metric.color.opacity(0.8), metric.color],
+                            colors: [metric.themeColor(for: theme).opacity(0.8), metric.themeColor(for: theme)],
                             startPoint: .leading,
                             endPoint: .trailing
                         ))
@@ -170,9 +170,9 @@ struct DailyUsageCardView: View {
     private var deltaColor: Color {
         switch metric {
         case .cost:
-            return report.costDelta <= 0 ? .green : .orange
+            return report.costDelta <= 0 ? theme.statusHealthy : theme.statusWarning
         case .tokens:
-            return report.tokenDelta <= 0 ? .green : .orange
+            return report.tokenDelta <= 0 ? theme.statusHealthy : theme.statusWarning
         case .workingTime:
             return theme.textTertiary
         }
@@ -215,6 +215,15 @@ enum DailyUsageMetric {
         case .cost: return .yellow
         case .tokens: return .green
         case .workingTime: return .purple
+        }
+    }
+
+    /// Theme-aware color (uses theme palette instead of system colors)
+    func themeColor(for theme: any AppThemeProvider) -> Color {
+        switch self {
+        case .cost: return theme.statusWarning
+        case .tokens: return theme.statusHealthy
+        case .workingTime: return theme.accentSecondary
         }
     }
 }

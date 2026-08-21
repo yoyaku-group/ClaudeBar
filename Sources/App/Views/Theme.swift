@@ -9,6 +9,7 @@ enum ThemeMode: String, CaseIterable {
     case dark
     case system
     case cli
+    case yoyaku
     case christmas
 
     var displayName: String {
@@ -17,6 +18,7 @@ enum ThemeMode: String, CaseIterable {
         case .dark: "Dark"
         case .system: "System"
         case .cli: "CLI"
+        case .yoyaku: "Yoyaku"
         case .christmas: "Christmas"
         }
     }
@@ -27,6 +29,7 @@ enum ThemeMode: String, CaseIterable {
         case .dark: "moon.stars.fill"
         case .system: "circle.lefthalf.filled"
         case .cli: "terminal.fill"
+        case .yoyaku: "brain.fill"
         case .christmas: "snowflake"
         }
     }
@@ -39,6 +42,11 @@ enum ThemeMode: String, CaseIterable {
     /// Whether this theme uses CLI-specific colors
     var isCLI: Bool {
         self == .cli
+    }
+
+    /// Whether this theme uses YOYAKU-specific colors
+    var isYoyaku: Bool {
+        self == .yoyaku
     }
 }
 
@@ -939,7 +947,8 @@ struct ThemeSwitcherButton: View {
         case .light: themeMode = .dark
         case .dark: themeMode = .system
         case .system: themeMode = .cli
-        case .cli: themeMode = .christmas
+        case .cli: themeMode = .yoyaku
+        case .yoyaku: themeMode = .christmas
         case .christmas: themeMode = .light
         }
     }
@@ -957,6 +966,7 @@ struct ThemeProvider: ViewModifier {
         case .dark: .dark
         case .system: systemColorScheme
         case .cli: .dark  // CLI uses dark mode base
+        case .yoyaku: .dark  // YOYAKU uses dark mode base
         case .christmas: .dark  // Christmas uses dark mode base
         }
     }

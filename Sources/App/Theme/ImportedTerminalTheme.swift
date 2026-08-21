@@ -31,8 +31,8 @@ public struct ImportedTerminalTheme: AppThemeProvider {
 
     public var id: String { props.id }
     public var displayName: String { props.displayName }
-    public var icon: String { "terminal.fill" }
-    public var subtitle: String? { "Imported" }
+    public var icon: String { "brain.fill" }
+    public var subtitle: String? { "iTerm2" }
     public var statusBarIconName: String? { nil }
 
     // MARK: - Color Scheme Preference

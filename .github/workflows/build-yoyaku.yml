@@ -1,0 +1,63 @@
+name: Build YOYAKU Theme
+
+on:
+  # Manual-only (rules/02 cost discipline): a macOS runner minute bills at 10x a
+  # Linux one — no per-push builds. Trigger from the Actions tab when needed.
+  workflow_dispatch:
+
+env:
+  SWIFT_VERSION: "6.2"
+  APP_NAME: ClaudeBar
+
+jobs:
+  build:
+    name: Build YOYAKU ClaudeBar
+    runs-on: macos-26
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Swift
+        uses: SwiftyLab/setup-swift@latest
+        with:
+          swift-version: ${{ env.SWIFT_VERSION }}
+
+      - name: Install Tuist
+        run: brew install tuist
+
+      - name: Install Dependencies
+        run: tuist install
+
+      - name: Generate Project
+        run: |
+          tuist generate --no-open
+          ./scripts/fix-swiftterm-metal.sh
+
+      - name: Build Release
+        run: |
+          xcodebuild archive \
+            -workspace "${APP_NAME}.xcworkspace" \
+            -scheme "${APP_NAME}" \
+            -configuration Release \
+            -archivePath "build/${APP_NAME}.xcarchive" \
+            -destination "generic/platform=macOS" \
+            -skipMacroValidation \
+            ARCHS="arm64 x86_64" \
+            ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+          cp -R "build/${APP_NAME}.xcarchive/Products/Applications/${APP_NAME}.app" .
+
+      - name: Create ZIP
+        run: |
+          ditto -c -k --keepParent "${APP_NAME}.app" "ClaudeBar-YOYAKU.zip"
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ClaudeBar-YOYAKU
+          path: ClaudeBar-YOYAKU.zip
+          retention-days: 14
