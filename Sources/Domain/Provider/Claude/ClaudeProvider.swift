@@ -65,6 +65,9 @@ public final class ClaudeProvider: AIProvider, MultiAccountProvider {
     /// Snapshots for all accounts (keyed by account ID).
     public private(set) var accountSnapshots: [String: UsageSnapshot] = [:]
 
+    /// Independent refresh lifecycle for every configured account.
+    public private(set) var accountRefreshStates: [String: ProviderAccountRefreshState] = [:]
+
     /// Probes for each configured account.
     private var accountProbes: [String: AccountProbes] = [:]
 
@@ -176,6 +179,7 @@ public final class ClaudeProvider: AIProvider, MultiAccountProvider {
         self.accounts = [defaultAccount()]
         self.activeAccount = self.accounts[0]
         self.accountSnapshots = [:]
+        self.accountRefreshStates = [ProviderAccount.defaultAccountId: .idle]
         self.accountProbes = [:]
     }
 
@@ -267,6 +271,7 @@ public final class ClaudeProvider: AIProvider, MultiAccountProvider {
         if isActive {
             isSyncing = true
         }
+        accountRefreshStates[accountId] = .refreshing
         defer {
             if isActive {
                 isSyncing = false
@@ -277,6 +282,7 @@ public final class ClaudeProvider: AIProvider, MultiAccountProvider {
             let newSnapshot = try await probes.active(for: probeMode).probe()
             let reported = await report(for: newSnapshot, kind: kind)
             accountSnapshots[accountId] = reported
+            accountRefreshStates[accountId] = .ready
             if isActive {
                 snapshot = reported
                 lastError = nil
@@ -289,6 +295,7 @@ public final class ClaudeProvider: AIProvider, MultiAccountProvider {
                     let newSnapshot = try await fallback.probe()
                     let reported = await report(for: newSnapshot, kind: kind)
                     accountSnapshots[accountId] = reported
+                    accountRefreshStates[accountId] = .ready
                     if isActive {
                         snapshot = reported
                         lastError = nil
@@ -299,6 +306,7 @@ public final class ClaudeProvider: AIProvider, MultiAccountProvider {
                     if isActive {
                         lastError = primaryError
                     }
+                    accountRefreshStates[accountId] = .failed(message: primaryError.localizedDescription)
                     throw primaryError
                 }
             }
@@ -306,6 +314,7 @@ public final class ClaudeProvider: AIProvider, MultiAccountProvider {
             if isActive {
                 lastError = primaryError
             }
+            accountRefreshStates[accountId] = .failed(message: primaryError.localizedDescription)
             throw primaryError
         }
     }
@@ -331,16 +340,11 @@ public final class ClaudeProvider: AIProvider, MultiAccountProvider {
         try await refreshAccount(accountId, kind: .interactive)
     }
 
-    public func refreshAllAccounts() async {
-        await withTaskGroup(of: (String, Result<UsageSnapshot, Error>).self) { group in
+    public func refreshAllAccounts(_ kind: RefreshKind) async {
+        await withTaskGroup(of: Void.self) { group in
             for account in accounts {
                 group.addTask {
-                    do {
-                        let snapshot = try await self.refreshAccount(account.accountId, kind: .interactive)
-                        return (account.accountId, .success(snapshot))
-                    } catch {
-                        return (account.accountId, .failure(error))
-                    }
+                    _ = try? await self.refreshAccount(account.accountId, kind: kind)
                 }
             }
             await group.waitForAll()
@@ -367,6 +371,7 @@ public final class ClaudeProvider: AIProvider, MultiAccountProvider {
             accounts = [defaultAccount()]
             activeAccount = accounts[0]
             accountProbes[ProviderAccount.defaultAccountId] = AccountProbes(cli: cliProbe, api: apiProbe)
+            accountRefreshStates = [ProviderAccount.defaultAccountId: accountRefreshStates[ProviderAccount.defaultAccountId] ?? .idle]
             return
         }
 
@@ -375,6 +380,7 @@ public final class ClaudeProvider: AIProvider, MultiAccountProvider {
             accounts = [defaultAccount()]
             activeAccount = accounts[0]
             accountProbes = [ProviderAccount.defaultAccountId: AccountProbes(cli: cliProbe, api: apiProbe)]
+            accountRefreshStates = [ProviderAccount.defaultAccountId: accountRefreshStates[ProviderAccount.defaultAccountId] ?? .idle]
             return
         }
 
@@ -386,6 +392,13 @@ public final class ClaudeProvider: AIProvider, MultiAccountProvider {
                 cli: cliProbeFactory(configDir),
                 api: apiProbeFactory(configDir)
             )
+        }
+
+        let configuredIds = Set(configs.map(\.accountId))
+        accountRefreshStates = accountRefreshStates
+            .filter { configuredIds.contains($0.key) }
+        for accountId in configuredIds where accountRefreshStates[accountId] == nil {
+            accountRefreshStates[accountId] = .idle
         }
 
         let persistedActiveId = multiSettings.activeAccountId(forProvider: id)

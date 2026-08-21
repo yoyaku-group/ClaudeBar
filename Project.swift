@@ -154,6 +154,26 @@ let project = Project(
             )
         ),
 
+        // MARK: - Application Tests
+        .target(
+            name: "AppTests",
+            destinations: .macOS,
+            product: .unitTests,
+            bundleId: "com.tddworks.claudebar.app-tests",
+            deploymentTargets: .macOS("15.0"),
+            sources: ["Tests/AppTests/**"],
+            dependencies: [
+                .target(name: "ClaudeBar"),
+                .target(name: "Domain"),
+                .target(name: "Infrastructure"),
+            ],
+            settings: .settings(
+                base: [
+                    "SWIFT_ACTIVE_COMPILATION_CONDITIONS": "MOCKING",
+                ]
+            )
+        ),
+
         // MARK: - Acceptance Tests (BDD - Outer Loop)
         .target(
             name: "AcceptanceTests",
@@ -190,6 +210,7 @@ let project = Project(
                     .testableTarget(target: .target("AcceptanceTests")),
                     .testableTarget(target: .target("DomainTests")),
                     .testableTarget(target: .target("InfrastructureTests")),
+                    .testableTarget(target: .target("AppTests")),
                 ],
                 configuration: .debug
             ),

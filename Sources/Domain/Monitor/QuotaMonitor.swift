@@ -9,6 +9,19 @@ public enum MonitoringEvent: Sendable {
     case error(providerId: String, Error)
 }
 
+/// One internally consistent menu-bar choice. The snapshot and optional
+/// account always come from the same provider/account so the displayed quota
+/// can never be paired with another profile's email.
+public struct MenuBarSnapshotSelection: Sendable, Equatable {
+    public let snapshot: UsageSnapshot
+    public let account: ProviderAccount?
+
+    public init(snapshot: UsageSnapshot, account: ProviderAccount?) {
+        self.snapshot = snapshot
+        self.account = account
+    }
+}
+
 /// The main domain service that coordinates quota monitoring across AI providers.
 /// Providers are rich domain models that own their own snapshots.
 /// QuotaMonitor coordinates refreshes and alerts users when status changes.
@@ -79,6 +92,23 @@ public final class QuotaMonitor {
         }
     }
 
+    /// Refreshes the overview's complete data set. Multi-account providers
+    /// refresh every account, while ordinary providers keep their established
+    /// active/single refresh behavior.
+    public func refreshOverview(kind: RefreshKind = .interactive) async {
+        await withTaskGroup(of: Void.self) { group in
+            for provider in providers.enabled {
+                group.addTask {
+                    if let multi = provider as? any MultiAccountProvider {
+                        await multi.refreshAllAccounts(kind)
+                    } else {
+                        await self.refreshProvider(provider, kind: kind)
+                    }
+                }
+            }
+        }
+    }
+
     /// Refreshes a single provider.
     /// `kind` defaults to `.interactive`; the background monitoring loop passes
     /// `.background` so providers can skip non-glanceable work (issue #204).
@@ -122,6 +152,16 @@ public final class QuotaMonitor {
 
     /// Refreshes the given providers once, preserving order and removing duplicates.
     public func refresh(providerIds: [String], kind: RefreshKind = .interactive) async {
+        await refresh(providerIds: providerIds, allAccountsForProviderId: nil, kind: kind)
+    }
+
+    /// Refreshes a provider set and, for the designated menu-bar provider,
+    /// refreshes all accounts so worst-account selection never goes stale.
+    public func refresh(
+        providerIds: [String],
+        allAccountsForProviderId: String?,
+        kind: RefreshKind = .interactive
+    ) async {
         var seen = Set<String>()
         let uniqueProviderIds = providerIds.filter { providerId in
             seen.insert(providerId).inserted
@@ -130,7 +170,12 @@ public final class QuotaMonitor {
         await withTaskGroup(of: Void.self) { group in
             for providerId in uniqueProviderIds {
                 group.addTask {
-                    await self.refresh(providerId: providerId, kind: kind)
+                    if providerId == allAccountsForProviderId,
+                       let multi = self.providers.provider(id: providerId) as? any MultiAccountProvider {
+                        await multi.refreshAllAccounts(kind)
+                    } else {
+                        await self.refresh(providerId: providerId, kind: kind)
+                    }
                 }
             }
         }
@@ -189,6 +234,41 @@ public final class QuotaMonitor {
             .first { $0.id == providerId }?
             .snapshot?
             .quota(forKey: quotaKey)
+    }
+
+    /// Selects the worst account snapshot for the requested menu-bar windows.
+    /// Ties are stable by account ID, avoiding label/email flicker between ticks.
+    public func menuBarSnapshotSelection(
+        providerId: String,
+        quotaKeys: [String]
+    ) -> MenuBarSnapshotSelection? {
+        guard let provider = providers.enabled.first(where: { $0.id == providerId }) else {
+            return nil
+        }
+        guard let multi = provider as? any MultiAccountProvider else {
+            return provider.snapshot.map { MenuBarSnapshotSelection(snapshot: $0, account: nil) }
+        }
+
+        let requestedKeys = quotaKeys.filter { !$0.isEmpty }
+        let candidates = multi.accounts.compactMap { account -> (ProviderAccount, UsageSnapshot, Double)? in
+            guard let snapshot = multi.accountSnapshots[account.accountId] else { return nil }
+            let requestedPercents = requestedKeys.compactMap { snapshot.quota(forKey: $0)?.percentRemaining }
+            guard let score = requestedPercents.min() else { return nil }
+            return (account, snapshot, score)
+        }
+        let selected = candidates.min { lhs, rhs in
+            lhs.2 == rhs.2 ? lhs.0.accountId < rhs.0.accountId : lhs.2 < rhs.2
+        }
+        if let selected {
+            return MenuBarSnapshotSelection(snapshot: selected.1, account: selected.0)
+        }
+
+        // No account exposes a requested window yet. Keep the active cached
+        // snapshot as a deterministic compatibility fallback.
+        guard let snapshot = multi.accountSnapshots[multi.activeAccount.accountId] ?? provider.snapshot else {
+            return nil
+        }
+        return MenuBarSnapshotSelection(snapshot: snapshot, account: multi.activeAccount)
     }
 
     /// Returns the menu bar percentage display for a provider/quota selection.
@@ -254,28 +334,36 @@ public final class QuotaMonitor {
         burnRateWarningEnabled: Bool = false,
         burnRateThreshold: Double = 1.5
     ) -> MenuBarLabel? {
+        let selection = menuBarSnapshotSelection(
+            providerId: providerId,
+            quotaKeys: [primaryQuotaKey, secondaryQuotaKey]
+        )
+
+        func selectedQuota(_ quotaKey: String) -> UsageQuota? {
+            selection?.snapshot.quota(forKey: quotaKey)
+        }
+
         func segment(forQuotaKey quotaKey: String) -> (text: String, status: QuotaStatus, percentRemaining: Double?)? {
-            let percentage = showPercentage
-                ? menuBarPercentageDisplay(
-                    providerId: providerId,
-                    quotaKey: quotaKey,
+            let quota = selectedQuota(quotaKey)
+            let percentage = showPercentage ? quota.map {
+                MenuBarPercentageDisplay(
+                    quota: $0,
                     mode: mode,
                     burnRateWarningEnabled: burnRateWarningEnabled,
                     burnRateThreshold: burnRateThreshold
                 )
-                : nil
-            let duration = showDuration
-                ? menuBarDurationDisplay(
-                    providerId: providerId,
-                    quotaKey: quotaKey,
+            } : nil
+            let duration = showDuration ? quota.map {
+                MenuBarDurationDisplay(
+                    quota: $0,
                     burnRateWarningEnabled: burnRateWarningEnabled,
                     burnRateThreshold: burnRateThreshold
                 )
-                : nil
+            } : nil
             // Pull the raw percent from the snapshot so progress-bar renderers
             // (Phase 7 dual-bar) have a number to draw — independent of the
             // percentage display setting above (which only affects the text).
-            let percentRemaining: Double? = quota(providerId: providerId, quotaKey: quotaKey)?.percentRemaining
+            let percentRemaining: Double? = quota?.percentRemaining
 
             switch (percentage, duration) {
             case let (.some(percentage), .some(duration)):
@@ -300,7 +388,7 @@ public final class QuotaMonitor {
             // (probes set it when the full label is too wide, e.g. a long
             // account discriminator), then the type's short label.
             func windowPrefix(forQuotaKey quotaKey: String) -> String {
-                if let title = quota(providerId: providerId, quotaKey: quotaKey)?.menuBarTitle {
+                if let title = selectedQuota(quotaKey)?.menuBarTitle {
                     return title
                 }
                 return QuotaType(quotaKey: quotaKey)?.shortLabel ?? quotaKey
@@ -356,7 +444,11 @@ public final class QuotaMonitor {
 
     /// Whether any provider is currently refreshing
     public var isRefreshing: Bool {
-        providers.all.contains { $0.isSyncing }
+        providers.all.contains { provider in
+            if provider.isSyncing { return true }
+            guard let multi = provider as? any MultiAccountProvider else { return false }
+            return multi.accountRefreshStates.values.contains(.refreshing)
+        }
     }
 
     /// Selects a provider by ID (must be enabled)
@@ -440,7 +532,8 @@ public final class QuotaMonitor {
     /// honored without restarting). Returns an AsyncStream of monitoring events.
     public func startMonitoring(
         interval: Duration = .seconds(60),
-        providerIds: [String]? = nil
+        providerIds: [String]? = nil,
+        allAccountsForProviderId: String? = nil
     ) -> AsyncStream<MonitoringEvent> {
         // Stop any existing monitoring
         monitoringTask?.cancel()
@@ -477,7 +570,11 @@ public final class QuotaMonitor {
                     // both keep idle energy use low (issue #204).
                     await ProbeExecutionContext.$qualityOfService.withValue(.utility) {
                         if let providerIds {
-                            await self.refresh(providerIds: providerIds, kind: .background)
+                            await self.refresh(
+                                providerIds: providerIds,
+                                allAccountsForProviderId: allAccountsForProviderId,
+                                kind: .background
+                            )
                         } else {
                             await self.refreshSelected(kind: .background)
                         }

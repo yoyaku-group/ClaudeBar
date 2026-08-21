@@ -139,7 +139,10 @@ struct AccountManagementCard: View {
             } else {
                 // Switch button
                 Button {
-                    provider.switchAccount(to: account.accountId)
+                    guard provider.switchAccount(to: account.accountId) else { return }
+                    Task {
+                        _ = try? await provider.refreshAccount(account.accountId)
+                    }
                 } label: {
                     Text("Switch")
                         .font(theme.font(size: 9, weight: .medium))

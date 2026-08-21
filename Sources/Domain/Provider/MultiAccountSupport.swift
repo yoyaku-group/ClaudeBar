@@ -1,5 +1,17 @@
 import Foundation
 
+/// Refresh lifecycle for one account of a multi-account provider.
+///
+/// A failed refresh intentionally does not imply that the cached snapshot was
+/// discarded. Consumers can show the last known values together with the
+/// failure message instead of replacing useful data with an endless spinner.
+public enum ProviderAccountRefreshState: Sendable, Equatable {
+    case idle
+    case refreshing
+    case ready
+    case failed(message: String)
+}
+
 /// Protocol for providers that support multiple accounts.
 ///
 /// Single-account providers don't need to implement this — they work as before.
@@ -25,6 +37,9 @@ public protocol MultiAccountProvider: AIProvider {
     /// Snapshots for all accounts (keyed by account ID)
     var accountSnapshots: [String: UsageSnapshot] { get }
 
+    /// Refresh lifecycle for all accounts (keyed by account ID).
+    var accountRefreshStates: [String: ProviderAccountRefreshState] { get }
+
     /// Switches the active account.
     /// After switching, `snapshot` reflects the new active account's data.
     /// - Parameter accountId: The account ID to switch to
@@ -38,8 +53,9 @@ public protocol MultiAccountProvider: AIProvider {
     @discardableResult
     func refreshAccount(_ accountId: String) async throws -> UsageSnapshot
 
-    /// Refreshes all accounts concurrently.
-    func refreshAllAccounts() async
+    /// Refreshes all accounts concurrently without letting one account's
+    /// failure cancel or hide the others.
+    func refreshAllAccounts(_ kind: RefreshKind) async
 
     /// Adds a new account configuration for this provider.
     /// - Parameter config: The account configuration to add
@@ -57,6 +73,11 @@ public protocol MultiAccountProvider: AIProvider {
 // MARK: - Default Implementations
 
 public extension MultiAccountProvider {
+    /// Compatibility entry point for interactive/manual refreshes.
+    func refreshAllAccounts() async {
+        await refreshAllAccounts(.interactive)
+    }
+
     /// Default: adding accounts is not supported unless explicitly implemented.
     func addAccount(_ config: ProviderAccountConfig) -> Bool {
         false

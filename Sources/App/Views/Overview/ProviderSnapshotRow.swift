@@ -25,13 +25,15 @@ struct ProviderSnapshotRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             header
-            if snapshot.errorMessage != nil {
-                errorBadge
-            } else if snapshot.isSyncing {
+            if snapshot.isSyncing {
                 Text("Syncing…")
                     .font(theme.font(size: 11, weight: .medium))
                     .foregroundStyle(theme.textTertiary)
-            } else {
+            }
+            if snapshot.errorMessage != nil {
+                errorBadge
+            }
+            if !snapshot.windows.isEmpty {
                 WindowBarView(
                     window: sessionWindow,
                     scopeLabel: "5h",
@@ -42,6 +44,10 @@ struct ProviderSnapshotRow: View {
                     scopeLabel: "7d",
                     isPrimary: filter == .weekly || filter == .all
                 )
+            } else if !snapshot.isSyncing && snapshot.errorMessage == nil {
+                Text("No data yet")
+                    .font(theme.font(size: 11, weight: .medium))
+                    .foregroundStyle(theme.textTertiary)
             }
         }
         .padding(12)
@@ -177,9 +183,12 @@ struct WindowBarView: View {
                     RoundedRectangle(cornerRadius: 3)
                         .fill(theme.progressTrack)
                     if let window, !window.isDollarBased {
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(theme.progressGradient(for: window.percentRemaining))
-                            .frame(width: max(4, geo.size.width * min(max(window.percentRemaining, 0), 100) / 100))
+                        let clamped = min(max(window.percentRemaining, 0), 100)
+                        if clamped > 0 {
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(theme.progressGradient(for: window.percentRemaining))
+                                .frame(width: max(4, geo.size.width * clamped / 100))
+                        }
                     } else if window == nil {
                         // 2 % stub so the track is visible without claiming a value.
                         RoundedRectangle(cornerRadius: 3)

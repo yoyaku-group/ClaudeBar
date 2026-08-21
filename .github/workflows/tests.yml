@@ -1,8 +1,7 @@
 name: Tests
 
 on:
-  push:
-    branches: [main, develop]
+  # PR-only (rules/02): macOS minutes bill at 10x Linux — no double-burn on push.
   pull_request:
     branches: [main, develop]
   workflow_dispatch:

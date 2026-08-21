@@ -278,6 +278,104 @@ struct ClaudeProviderTests {
         // CLI mode imposes no floor — it keeps the user's chosen interval.
         #expect(claude.backgroundRefreshFloor == nil)
     }
+
+    @Test
+    func `all-account refresh isolates failure and retains cached snapshot`() async {
+        let settings = FakeMultiClaudeSettings(configs: [
+            ProviderAccountConfig(accountId: "admin", label: "Admin", email: "admin@example.com", probeConfig: ["claudeConfigDir": "admin"]),
+            ProviderAccountConfig(accountId: "tech", label: "Tech", email: "tech@example.com", probeConfig: ["claudeConfigDir": "tech"]),
+        ])
+        let adminProbe = ScriptedUsageProbe(results: [
+            .success(Self.snapshot(percent: 70, email: "admin@example.com")),
+            .success(Self.snapshot(percent: 65, email: "admin@example.com")),
+        ])
+        let techProbe = ScriptedUsageProbe(results: [
+            .success(Self.snapshot(percent: 20, email: "tech@example.com")),
+            .failure(ProbeError.parseFailed("tech credentials expired")),
+        ])
+        let provider = ClaudeProvider(
+            cliProbe: adminProbe,
+            apiProbe: MockUsageProbe(),
+            settingsRepository: settings,
+            cliProbeFactory: { $0 == "tech" ? techProbe : adminProbe },
+            apiProbeFactory: { _ in nil }
+        )
+
+        await provider.refreshAllAccounts(.interactive)
+        await provider.refreshAllAccounts(.background)
+
+        #expect(provider.accountSnapshots["admin"]?.lowestQuota?.percentRemaining == 65)
+        #expect(provider.accountSnapshots["tech"]?.lowestQuota?.percentRemaining == 20)
+        #expect(provider.accountRefreshStates["admin"] == .ready)
+        #expect(provider.accountRefreshStates["tech"] == .failed(message: "tech credentials expired"))
+    }
+
+    @Test
+    func `account switch surfaces cached snapshot before refresh`() async throws {
+        let settings = FakeMultiClaudeSettings(configs: [
+            ProviderAccountConfig(accountId: "admin", label: "Admin", probeConfig: ["claudeConfigDir": "admin"]),
+            ProviderAccountConfig(accountId: "tech", label: "Tech", probeConfig: ["claudeConfigDir": "tech"]),
+        ])
+        let adminProbe = ScriptedUsageProbe(results: [.success(Self.snapshot(percent: 80))])
+        let techProbe = ScriptedUsageProbe(results: [.success(Self.snapshot(percent: 15))])
+        let provider = ClaudeProvider(
+            cliProbe: adminProbe,
+            apiProbe: MockUsageProbe(),
+            settingsRepository: settings,
+            cliProbeFactory: { $0 == "tech" ? techProbe : adminProbe },
+            apiProbeFactory: { _ in nil }
+        )
+        await provider.refreshAllAccounts()
+
+        #expect(provider.switchAccount(to: "tech"))
+        #expect(provider.activeAccount.accountId == "tech")
+        #expect(provider.snapshot?.lowestQuota?.percentRemaining == 15)
+        #expect(settings.activeId == "tech")
+    }
+
+    @Test
+    func `menu bar selection uses worst account snapshot and matching identity`() async {
+        let settings = FakeMultiClaudeSettings(configs: [
+            ProviderAccountConfig(accountId: "admin", label: "Admin", email: "admin@example.com", probeConfig: ["claudeConfigDir": "admin"]),
+            ProviderAccountConfig(accountId: "tech", label: "Tech", email: "tech@example.com", probeConfig: ["claudeConfigDir": "tech"]),
+        ])
+        let adminProbe = ScriptedUsageProbe(results: [.success(Self.snapshot(percent: 75, email: "admin@example.com"))])
+        let techProbe = ScriptedUsageProbe(results: [.success(Self.snapshot(percent: 9, email: "tech@example.com"))])
+        let provider = ClaudeProvider(
+            cliProbe: adminProbe,
+            apiProbe: MockUsageProbe(),
+            settingsRepository: settings,
+            cliProbeFactory: { $0 == "tech" ? techProbe : adminProbe },
+            apiProbeFactory: { _ in nil }
+        )
+        await provider.refreshAllAccounts()
+        let monitor = QuotaMonitor(
+            providers: AIProviders(providers: [provider]),
+            clock: ImmediateTestClock()
+        )
+
+        let selection = monitor.menuBarSnapshotSelection(providerId: "claude", quotaKeys: ["session"])
+        let label = monitor.menuBarLabel(
+            providerId: "claude",
+            primaryQuotaKey: "session",
+            showPercentage: true,
+            showDuration: false,
+            mode: .remaining
+        )
+
+        #expect(selection?.account?.accountId == "tech")
+        #expect(selection?.snapshot.accountEmail == "tech@example.com")
+        #expect(label?.text == "9%")
+    }
+
+    private static func snapshot(percent: Double, email: String? = nil) -> UsageSnapshot {
+        UsageSnapshot(
+            providerId: "claude",
+            quotas: [UsageQuota(percentRemaining: percent, quotaType: .session, providerId: "claude")],
+            capturedAt: Date(),
+            accountEmail: email
+        )
+    }
 }
 
 // MARK: - Test Helpers
@@ -300,4 +398,55 @@ private final class FakeClaudeSettings: ClaudeSettingsRepository, @unchecked Sen
     func setClaudeProbeMode(_ mode: ClaudeProbeMode) { probeMode = mode }
     func claudeCliFallbackEnabled() -> Bool { cliFallbackEnabled }
     func setClaudeCliFallbackEnabled(_ enabled: Bool) { cliFallbackEnabled = enabled }
+}
+
+private final class FakeMultiClaudeSettings: ClaudeSettingsRepository, MultiAccountSettingsRepository, @unchecked Sendable {
+    var configs: [ProviderAccountConfig]
+    var activeId: String?
+
+    init(configs: [ProviderAccountConfig], activeId: String? = nil) {
+        self.configs = configs
+        self.activeId = activeId
+    }
+
+    func isEnabled(forProvider id: String) -> Bool { true }
+    func isEnabled(forProvider id: String, defaultValue: Bool) -> Bool { true }
+    func setEnabled(_ enabled: Bool, forProvider id: String) {}
+    func customCardURL(forProvider id: String) -> String? { nil }
+    func setCustomCardURL(_ url: String?, forProvider id: String) {}
+    func claudeProbeMode() -> ClaudeProbeMode { .cli }
+    func setClaudeProbeMode(_ mode: ClaudeProbeMode) {}
+    func claudeCliFallbackEnabled() -> Bool { false }
+    func setClaudeCliFallbackEnabled(_ enabled: Bool) {}
+    func accounts(forProvider id: String) -> [ProviderAccountConfig] { configs }
+    func addAccount(_ config: ProviderAccountConfig, forProvider id: String) { configs.append(config) }
+    func removeAccount(accountId: String, forProvider id: String) { configs.removeAll { $0.accountId == accountId } }
+    func updateAccount(_ config: ProviderAccountConfig, forProvider id: String) {
+        guard let index = configs.firstIndex(where: { $0.accountId == config.accountId }) else { return }
+        configs[index] = config
+    }
+    func activeAccountId(forProvider id: String) -> String? { activeId }
+    func setActiveAccountId(_ accountId: String?, forProvider id: String) { activeId = accountId }
+}
+
+private actor ScriptedUsageProbe: UsageProbe {
+    private var results: [Result<UsageSnapshot, Error>]
+
+    init(results: [Result<UsageSnapshot, Error>]) {
+        self.results = results
+    }
+
+    func isAvailable() async -> Bool { true }
+
+    func probe() async throws -> UsageSnapshot {
+        let result = results.isEmpty
+            ? Result<UsageSnapshot, Error>.failure(ProbeError.parseFailed("No scripted result"))
+            : results.removeFirst()
+        return try result.get()
+    }
+}
+
+private struct ImmediateTestClock: Clock {
+    func sleep(for duration: Duration) async throws {}
+    func sleep(nanoseconds: UInt64) async throws {}
 }

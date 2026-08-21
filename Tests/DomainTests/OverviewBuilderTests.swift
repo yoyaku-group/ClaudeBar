@@ -40,6 +40,7 @@ struct OverviewBuilderTests {
 
         var shimAccounts: [Account] = []
         var shimSnapshots: [String: UsageSnapshot] = [:]
+        var shimRefreshStates: [String: ProviderAccountRefreshState] = [:]
 
         var accounts: [ProviderAccount] {
             shimAccounts.map {
@@ -48,9 +49,10 @@ struct OverviewBuilderTests {
         }
         var activeAccount: ProviderAccount { accounts.first! }
         var accountSnapshots: [String: UsageSnapshot] { shimSnapshots }
+        var accountRefreshStates: [String: ProviderAccountRefreshState] { shimRefreshStates }
         func switchAccount(to accountId: String) -> Bool { true }
         func refreshAccount(_ accountId: String) async throws -> UsageSnapshot { UsageSnapshot(providerId: id, quotas: [], capturedAt: Date()) }
-        func refreshAllAccounts() async {}
+        func refreshAllAccounts(_ kind: RefreshKind) async {}
     }
 
     /// Minimal protocol so the stub's account list stays value-typed.
@@ -140,6 +142,33 @@ struct OverviewBuilderTests {
         #expect(rows.count == 1)
         #expect(rows[0].errorMessage != nil)
         #expect(rows[0].windows.isEmpty)
+    }
+
+    @Test("multi-account idle row is not a perpetual spinner")
+    func multiAccountIdleRowIsNotAPerpetualSpinner() {
+        let multi = StubMultiProvider(id: "claude", name: "Claude", snapshot: nil)
+        multi.shimAccounts = [.init(accountId: "admin", label: "Admin")]
+        multi.shimRefreshStates = ["admin": .idle]
+
+        let row = OverviewBuilder.build(providers: [multi])[0]
+
+        #expect(row.isSyncing == false)
+        #expect(row.errorMessage == nil)
+        #expect(row.windows.isEmpty)
+    }
+
+    @Test("multi-account failed row retains cached windows and exposes error")
+    func multiAccountFailedRowRetainsCachedWindowsAndExposesError() {
+        let multi = StubMultiProvider(id: "claude", name: "Claude", snapshot: nil)
+        multi.shimAccounts = [.init(accountId: "tech", label: "Tech")]
+        multi.shimSnapshots = ["tech": Self.snapshot(quotas: [Self.quota(42, .weekly)])]
+        multi.shimRefreshStates = ["tech": .failed(message: "credentials expired")]
+
+        let row = OverviewBuilder.build(providers: [multi])[0]
+
+        #expect(row.windows.first?.percentRemaining == 42)
+        #expect(row.errorMessage == "credentials expired")
+        #expect(row.isSyncing == false)
     }
 
     // MARK: - Worst window + status per filter

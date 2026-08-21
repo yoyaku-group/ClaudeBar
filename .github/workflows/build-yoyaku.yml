@@ -3,7 +3,14 @@ name: Build YOYAKU Theme
 # Manual only (rules/02 — no CI on push). Run via workflow_dispatch on the
 # branch you want to verify; the produced zip is the unsigned install artifact.
 on:
+  # Manual-only (rules/02 cost discipline): a macOS runner minute bills at 10x a
+  # Linux one — no per-push builds. Trigger from the Actions tab when needed.
   workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Exact 40-character commit SHA to build
+        required: true
+        type: string
 
 env:
   APP_NAME: ClaudeBar
@@ -16,19 +23,52 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.expected_sha }}
 
-      # No explicit Swift toolchain setup: use the runner's bundled Xcode, the
-      # same toolchain Tuist builds its macro prebuilts (SwiftSyntax) against.
-      # Installing a separate toolchain via SwiftyLab/setup-swift drifted out of
-      # sync with those prebuilts and broke the build (same fix as release.yml).
+      - name: Verify exact source revision
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          if [[ ! "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::expected_sha must be a full lowercase commit SHA"
+            exit 1
+          fi
+
+          ACTUAL_SHA="$(git rev-parse HEAD)"
+          if [[ "$ACTUAL_SHA" != "$EXPECTED_SHA" ]]; then
+            echo "::error::Checked out $ACTUAL_SHA, expected $EXPECTED_SHA"
+            exit 1
+          fi
+
+          if ! git diff --quiet || ! git diff --cached --quiet || [[ -n "$(git status --porcelain)" ]]; then
+            echo "::error::Exact source checkout is dirty before provenance stamping"
+            exit 1
+          fi
+
+      - name: Stamp build provenance
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          BUILD_UTC="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          SHORT_SHA="${EXPECTED_SHA:0:12}"
+          INFO_PLIST="Sources/App/Info.plist"
+
+          /usr/libexec/PlistBuddy -c "Set :ClaudeBarGitSHA $EXPECTED_SHA" "$INFO_PLIST"
+          /usr/libexec/PlistBuddy -c "Set :ClaudeBarBuildUTC $BUILD_UTC" "$INFO_PLIST"
+          /usr/libexec/PlistBuddy -c "Set :ClaudeBarGitDirty false" "$INFO_PLIST"
+
+          echo "BUILD_UTC=$BUILD_UTC" >> "$GITHUB_ENV"
+          echo "SHORT_SHA=$SHORT_SHA" >> "$GITHUB_ENV"
+
+      # Use the Swift toolchain bundled with the runner's Xcode. Tuist macro
+      # prebuilts must match that toolchain.
 
       - name: Install Tuist
         run: brew install tuist
 
       - name: Clean Tuist Cache
-        run: |
-          rm -rf Tuist/.build/tuist-derived
-          tuist clean
+        run: tuist clean
 
       - name: Install Dependencies
         run: tuist install
@@ -38,11 +78,8 @@ jobs:
           tuist generate --no-open
           ./scripts/fix-swiftterm-metal.sh
 
-      - name: Run Infrastructure Tests
-        run: tuist test Infrastructure
-
-      - name: Run Domain Tests
-        run: tuist test Domain
+      - name: Run Complete Test Suite
+        run: tuist test ClaudeBar
 
       - name: Build Release
         run: |
@@ -61,13 +98,53 @@ jobs:
 
           cp -R "build/${APP_NAME}.xcarchive/Products/Applications/${APP_NAME}.app" .
 
-      - name: Create ZIP
+      - name: Ad-hoc sign and verify app
         run: |
-          ditto -c -k --keepParent "${APP_NAME}.app" "ClaudeBar-YOYAKU.zip"
+          codesign --force --deep --sign - "${APP_NAME}.app"
+          codesign --verify --deep --strict --verbose=2 "${APP_NAME}.app"
+          lipo -info "${APP_NAME}.app/Contents/MacOS/${APP_NAME}"
+
+      - name: Create artifact and manifest
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          APP_ZIP="ClaudeBar-YOYAKU-${SHORT_SHA}.zip"
+          CHECKSUM_FILE="${APP_ZIP}.sha256"
+          MANIFEST_FILE="ClaudeBar-YOYAKU-${SHORT_SHA}.manifest.json"
+
+          ditto -c -k --keepParent "${APP_NAME}.app" "$APP_ZIP"
+          shasum -a 256 "$APP_ZIP" > "$CHECKSUM_FILE"
+          python3 - "$APP_ZIP" "$CHECKSUM_FILE" "$MANIFEST_FILE" <<'PY'
+          import hashlib
+          import json
+          import os
+          import sys
+
+          artifact, checksum_file, manifest_file = sys.argv[1:]
+          with open(artifact, "rb") as handle:
+              digest = hashlib.sha256(handle.read()).hexdigest()
+          manifest = {
+              "artifact": artifact,
+              "build_utc": os.environ["BUILD_UTC"],
+              "git_dirty": False,
+              "git_sha": os.environ["EXPECTED_SHA"],
+              "sha256": digest,
+          }
+          with open(manifest_file, "w", encoding="utf-8") as handle:
+              json.dump(manifest, handle, indent=2, sort_keys=True)
+              handle.write("\n")
+          PY
+
+          echo "APP_ZIP=$APP_ZIP" >> "$GITHUB_ENV"
+          echo "CHECKSUM_FILE=$CHECKSUM_FILE" >> "$GITHUB_ENV"
+          echo "MANIFEST_FILE=$MANIFEST_FILE" >> "$GITHUB_ENV"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ClaudeBar-YOYAKU
-          path: ClaudeBar-YOYAKU.zip
-          retention-days: 30
+          name: ClaudeBar-YOYAKU-${{ env.SHORT_SHA }}
+          path: |
+            ${{ env.APP_ZIP }}
+            ${{ env.CHECKSUM_FILE }}
+            ${{ env.MANIFEST_FILE }}
+          retention-days: 14

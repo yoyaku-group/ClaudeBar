@@ -34,4 +34,3 @@ struct MonthlyResetDateTests {
         #expect(result > ref)
     }
 }
-

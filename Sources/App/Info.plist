@@ -20,6 +20,12 @@
     <string>1.0.0</string>
     <key>CFBundleVersion</key>
     <string>1</string>
+    <key>ClaudeBarGitSHA</key>
+    <string>unknown</string>
+    <key>ClaudeBarBuildUTC</key>
+    <string>unknown</string>
+    <key>ClaudeBarGitDirty</key>
+    <true/>
     <key>LSApplicationCategoryType</key>
     <string>public.app-category.utilities</string>
     <key>LSMinimumSystemVersion</key>

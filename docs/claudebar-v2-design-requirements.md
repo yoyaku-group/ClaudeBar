@@ -47,11 +47,12 @@ Header label = worst window filtered (matches existing semantic).
 Phase 1 commit : `0a8b0a5` (row-level), `8a324c7` (menu-bar NSImage
 renderer for the stacked glyph).
 
-## R3 — Multi-account rows per provider (Claude = 2 rows for Ben)
+## R3 — Multi-account rows per provider (Claude = 4 preserved profiles)
 
-Ben has **2 Claude accounts** (`webmaster@yoyaku.fr` + `tech@yoyaku.fr`,
-possibly also `benjamin@chapelle14.com`). The popup must show **one row
-per account**, not one row with email sub-line.
+The current machine has four configured Claude profiles: **Default, Admin,
+Bedrock, and Tech**. Settings are authoritative: startup discovery must never
+delete, replace, or implicitly prune any of them. The popup shows **one row per
+account**, not one aggregate row.
 
 Why rows are duplicated (not single-row-with-email) :
 - Per-account quota data is genuinely different (different plan,
@@ -69,26 +70,19 @@ ClaudeBar popup has **two display modes** (toggle via
    - `OverviewBuilder.swift:18` iterates `multi.accounts` and emits
      one `ProviderSnapshot` per account with `accountLabel` +
      `accountEmail`.
-   - **For 2 Claude accounts → 2 Claude rows** ✅ (this works in the
-     pushed build).
+   - **For 4 Claude accounts → 4 Claude rows**.
    - User reaches overview mode by clicking "Dashboard" button in the
      provider-mode header (MenuContentView.swift:101).
 
 2. **Provider mode** (the screenshot Ben took) : `MenuContentView`
    shows ONE selected provider with a top tab strip to switch providers
    (Claude / Codex / Z.ai / Amp).
-   - **Current code limitation** : `selectedProvider.snapshot` returns
-     the AGGREGATED snapshot, NOT per-account. The tab strip iterates
-     providers (one tab per provider), not accounts.
-   - **Sub-tab design desired by Ben** : the Claude tab should itself
-     contain N sub-tabs (`Claude (tech@)` / `Claude (webmaster@)`).
-     **NOT YET IMPLEMENTED**. Implementation deferred until Phase 8
-     (single-icon centralization) — when the popup layout is redesigned
-     for the single-icon mode anyway, sub-tabs per provider fold in
-     naturally.
-   - Until Phase 8 : provider mode shows Claude as ONE entry with the
-     ACTIVE account's snapshot. To see the 2nd account, switch to
-     Overview mode.
+   - A persistent `AccountPickerView` under the selected provider switches
+     between every configured account. It remains mounted before the first
+     snapshot exists.
+   - Switching exposes that account's cached snapshot immediately, then
+     refreshes only the selected account. `activeAccount.accountId` is the
+     single selection source of truth.
 
 ### Each row layout (both modes)
 
@@ -97,41 +91,43 @@ ClaudeBar popup has **two display modes** (toggle via
   truncation mode `.middle`) + 2 stacked quota bars (R2) + reset
   countdowns.
 
-### Tooltip on menu-bar icon (single-icon mode, post-Phase 8)
+### Menu-bar account selection
 
-When multi-account, render the glyph with the WORST-quota account's
-percent + inline email suffix (e.g. `5h 0% | 7d 41% · tech@`). Today
-the tooltip prepends `email + " — " + label` (Phase 7c) — keep that
-during the pre-Phase-8 transition.
+When multi-account, render the glyph with the WORST-quota account's values
+and the matching account email (e.g. dual bars + `tech@y`). The quota snapshot
+and identity are selected atomically from the same account. Email is optional;
+two percentage windows still use the dual-bar renderer without it.
 
 ### Implementation contract
 
-- `ClaudeProvider` already conforms to `MultiAccountProvider` protocol
-  with `accounts: [ProviderAccount]` + `accountSnapshots: [String: UsageSnapshot]`
-  (line 56 + line 66 of `Sources/Domain/Provider/Claude/ClaudeProvider.swift`).
+- `ClaudeProvider` conforms to `MultiAccountProvider` with `accounts`,
+  `accountSnapshots`, and per-account `accountRefreshStates`.
+- Interactive overview refreshes all accounts concurrently. One account's
+  failure retains its cached snapshot and never cancels successful accounts.
+- The background loop refreshes all accounts only for the configured menu-bar
+  multi-account provider; other providers keep active-only background refresh.
 - `OverviewBuilder.swift:18` already iterates `multi.accounts` and emits
   one `ProviderSnapshot` per account with `accountLabel` + `accountEmail`.
 - `ProviderSnapshot` model already has `accountLabel: String?` +
   `accountEmail: String?` fields (lines 124-128 of `OverviewModels.swift`).
-- `MenuContentView.swift:38-39` reads `monitor.selectedProvider` (singular
-  provider, aggregated snapshot). **Sub-tab implementation needed for
-  Phase 8** : iterate `multi.accounts` and emit a `selectedAccountId`
-  state, render sub-tabs within the provider header.
+- Provider settings mount `AccountManagementCard`, including account switching
+  and targeted refresh.
 
-### Account enumeration depends on `claude auth list`
+### First-run account discovery
 
-Verify with `claude auth list` in terminal how many accounts Claude CLI
-exposes. If CLI exposes 1 account only, fallback shows 1 row.
+`claude auth list` is not supported by the installed Claude Code CLI. On a
+true first run only, directory candidates are validated with the bounded,
+read-only command:
+
+`CLAUDE_CONFIG_DIR=<dir> claude auth status --json`
+
+Only authenticated candidates are seeded, normalized IDs are deduplicated,
+and any existing settings short-circuit discovery unchanged.
 
 Phase 1.5 commits (multi-account infrastructure already shipped) :
 `637c3a5` (ClaudeAccountInfoResolver wired), `23cc80c` (`accountEmail`
 field), `4c750f1` (monospaced email render), `67cb4e3` (tooltip prepend).
 Old build `06a3939` predates these — visible regression vs new build.
-
-If `Claude CLI auth list` returns 1 account only, the popup still shows
-1 row but the row is now email-disambiguated. Future fix : add a
-multi-account login flow in `ClaudeProvider` to detect/seed accounts
-not yet in CLI's `auth list`.
 
 ## R4 — SF Symbols / polished glyphs (no red dots)
 
@@ -162,18 +158,18 @@ already animates a tint-interpolated cat icon based on worst-health
 across providers. After Phase 8 (single centralized icon, gated on P4
 retirement), this becomes the ONLY icon in the menu-bar.
 
-Phase 4 retirement checklist (do NOT execute before Phase 4 timeline) :
+Phase 4 retirement checklist (separate T4 approval after a successful soak) :
 1. Confirm `app.overviewModeEnabled = true` default.
-2. `rm ~/repos/llm-router/integrations/swiftbar/yoyaku-quotas.5m.sh`
-   (symlink).
-3. `rm ~/repos/mac-guardian/swiftbar/guardian.10s.sh` (copy).
-4. `launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.yoyaku.swiftbar.plist`.
-5. After ≥1 week stable : `rm /Applications/RunCat.app` +
-   `rm /Applications/SwiftBar.app`.
+2. Back up and disable the legacy SwiftBar scripts and LaunchAgent reversibly.
+3. Observe ClaudeBar for at least one week with an explicit rollback path.
+4. Remove legacy applications only after Ben explicitly approves the named
+   destructive targets.
 
 ## R6 — Single centralized icon in menu-bar
 
-After Phase 4 retirement, the menu-bar has **exactly one** ClaudeBar icon.
+After the separately approved Phase 4 retirement, the menu-bar has **exactly
+one** ClaudeBar icon. RunCat and SwiftBar remain installed/running during the
+canary and soak; this requirement is therefore not complete at build time.
 All other entries (RunCat, SwiftBar, Mac Guardian native popup) are
 retired. Mac Guardian data lives in ClaudeBar's `GuardianCardView` (in
 the popup) — see Phase 5d + Phase 9a commits.
@@ -198,14 +194,12 @@ Required patterns :
 
 ## Build / install reminder
 
-All R1–R7 changes are committed on branch
-`feat/yoyaku-multi-profile` (locally, NOT pushed as of 2026-08-20).
-Phase 4 retirement requires Ben's push gesture (sandbox blocks SSH + gh
-token expired on the autopilot session) + CI vert + 1 week soak.
-
-Until the build is reinstalled, Ben sees the **old build** (`06a3939`)
-which predates R2/R3/R4. The Kimi row from R1 is also old-build-stale
-because `KimiProvider` was registered after `06a3939`.
+The completion branch is built only through the manual exact-SHA YOYAKU
+workflow. Its artifact embeds the full Git SHA, UTC build timestamp, and
+`dirty=false`, is ad-hoc signed and verified, and ships with a SHA-256 checksum
+plus JSON manifest. Installation must use that verified artifact with an app
+and settings backup; the installed `06a3939` build remains untouched until the
+canary passes.
 
 ## Reference screenshots (Ben's actual visible state 2026-08-20)
 

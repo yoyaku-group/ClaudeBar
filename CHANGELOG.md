@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Added complete Claude multi-account refresh state, provider/account pickers,
+  validated first-run discovery, and full-account overview refresh.
+- Added exact-SHA YOYAKU artifacts with embedded provenance, verified ad-hoc
+  signing, SHA-256 checksums, and a machine-readable manifest.
+
+### Fixed
+- Multi-account overview rows no longer remain stuck in a synthetic syncing
+  state, and failed refreshes retain their last known quota windows.
+- Menu-bar quota values and account email now always come from the same
+  deterministic worst-account snapshot.
+- Dual quota bars render without requiring an email and show no false fill at
+  exactly zero percent.
+- Kimi's persisted probe-mode test now matches the production API default.
+
+---
+
+## [1.1.0-yoyaku] - 2026-03-21
+
+### Changed
+- Preserved the YOYAKU fork integration checkpoint from the pre-sync history.
+
+---
+
+## [0.4.81] - 2026-08-21
+
+### Changed
+- Bug fixes and improvements.
+
+---
+
+## [0.4.80] - 2026-08-19
+
+### Changed
+- Bug fixes and improvements.
+
 ---
 
 ## [0.4.79] - 2026-08-13
@@ -962,7 +998,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Menu bar interface with quota display
 - Automatic refresh every 5 minutes
 
-[Unreleased]: https://github.com/tddworks/ClaudeBar/compare/v0.4.79...HEAD
+[Unreleased]: https://github.com/tddworks/ClaudeBar/compare/v0.4.81...HEAD
+[1.1.0-yoyaku]: https://github.com/yoyaku-group/ClaudeBar/tree/d41f845e5aa6dceed32076863bb808c4ff4ad57a
+[0.4.81]: https://github.com/tddworks/ClaudeBar/compare/v0.4.80...v0.4.81
+[0.4.80]: https://github.com/tddworks/ClaudeBar/compare/v0.4.79...v0.4.80
 [0.4.79]: https://github.com/tddworks/ClaudeBar/compare/v0.4.78...v0.4.79
 [0.4.78]: https://github.com/tddworks/ClaudeBar/compare/v0.4.77...v0.4.78
 [0.4.77]: https://github.com/tddworks/ClaudeBar/compare/v0.4.76...v0.4.77

@@ -302,12 +302,12 @@ struct UsageQuotaTests {
     }
 
     @Test
-    func `displayProgressPercent returns percentRemaining in remaining mode`() {
+    func `displayProgressPercent returns percentUsed in remaining mode`() {
         // Given
         let quota = UsageQuota(percentRemaining: 75, quotaType: .session, providerId: "claude")
 
-        // When & Then
-        #expect(quota.displayProgressPercent(mode: .remaining) == 75)
+        // When & Then - bar always encodes consumption
+        #expect(quota.displayProgressPercent(mode: .remaining) == 25)
     }
 
     @Test
@@ -331,12 +331,29 @@ struct UsageQuotaTests {
     }
 
     @Test
-    func `displayProgressPercent returns percentRemaining in pace mode`() {
+    func `displayProgressPercent returns percentUsed in pace mode`() {
         // Given
         let quota = UsageQuota(percentRemaining: 75, quotaType: .session, providerId: "claude")
 
-        // When & Then - pace mode progress bar shows remaining (same as remaining mode)
-        #expect(quota.displayProgressPercent(mode: .pace) == 75)
+        // When & Then - pace mode progress bar shows used (same as remaining/used)
+        #expect(quota.displayProgressPercent(mode: .pace) == 25)
+    }
+
+    @Test
+    func `expectedProgressPercent returns elapsed time on the used scale`() {
+        // Session is 5h. 1.25h remaining -> 75% elapsed -> tick at 75 used.
+        let quota = UsageQuota(
+            percentRemaining: 43,
+            quotaType: .session,
+            providerId: "claude",
+            resetsAt: Date().addingTimeInterval(1.25 * 3600)
+        )
+        let expectedRemaining = quota.expectedProgressPercent(mode: .remaining)!
+        let expectedUsed = quota.expectedProgressPercent(mode: .used)!
+        let expectedPace = quota.expectedProgressPercent(mode: .pace)!
+        #expect(expectedRemaining > 74 && expectedRemaining < 76)
+        #expect(expectedUsed > 74 && expectedUsed < 76)
+        #expect(expectedPace > 74 && expectedPace < 76)
     }
 
     // MARK: - Dollar-Based Quotas
@@ -544,8 +561,8 @@ struct UsageQuotaTests {
     }
 
     @Test
-    func `paceTickHelp explains expected remaining in remaining mode`() {
-        // 75% of a 5h window elapsed -> steady usage would leave ~25%.
+    func `paceTickHelp explains expected used in remaining mode`() {
+        // 75% of a 5h window elapsed -> steady usage would have used ~75%.
         let quota = UsageQuota(
             percentRemaining: 43,
             quotaType: .timeLimit("Z.ai 5h"),
@@ -554,7 +571,8 @@ struct UsageQuotaTests {
             windowDuration: 5 * 3600
         )
         let help = quota.paceTickHelp(mode: .remaining)!
-        #expect(help.contains("~25% remaining"))
+        #expect(help.contains("~75%"))
+        #expect(help.contains("used"))
         // 57 used vs 75 elapsed -> below expected usage, surfaced inline.
         #expect(help.contains("below expected usage"))
     }
@@ -581,5 +599,67 @@ struct UsageQuotaTests {
             providerId: "zai"
         )
         #expect(quota.paceTickHelp(mode: .remaining) == nil)
+    }
+
+    // MARK: - Shared Reset Description
+
+    @Test
+    func `sharedResetDescription returns countdown when all quotas share a reset`() {
+        let resetsAt = Date().addingTimeInterval(2.0 * 86400 + 5.0 * 3600 + 30.0 * 60 + 30)
+        let quotas = [
+            UsageQuota(percentRemaining: 0, quotaType: .weekly, providerId: "claude", resetsAt: resetsAt),
+            UsageQuota(percentRemaining: 13, quotaType: .timeLimit("Build"), providerId: "claude", resetsAt: resetsAt),
+            UsageQuota(percentRemaining: 93, quotaType: .timeLimit("Chat"), providerId: "claude", resetsAt: resetsAt)
+        ]
+
+        #expect(quotas.sharedResetDescription() == "Resets in 2d 5h 30m")
+    }
+
+    @Test
+    func `sharedResetDescription returns countdown when resets are within 60 seconds`() {
+        let base = Date().addingTimeInterval(3.0 * 3600 + 15.0 * 60 + 30)
+        let quotas = [
+            UsageQuota(percentRemaining: 10, quotaType: .weekly, providerId: "claude", resetsAt: base),
+            UsageQuota(percentRemaining: 20, quotaType: .timeLimit("Build"), providerId: "claude", resetsAt: base.addingTimeInterval(30))
+        ]
+
+        #expect(quotas.sharedResetDescription() == "Resets in 3h 15m")
+    }
+
+    @Test
+    func `sharedResetDescription is nil when reset windows differ`() {
+        let weekly = Date().addingTimeInterval(3 * 86400)
+        let session = Date().addingTimeInterval(4 * 3600)
+        let quotas = [
+            UsageQuota(percentRemaining: 10, quotaType: .weekly, providerId: "claude", resetsAt: weekly),
+            UsageQuota(percentRemaining: 80, quotaType: .session, providerId: "claude", resetsAt: session)
+        ]
+
+        #expect(quotas.sharedResetDescription() == nil)
+    }
+
+    @Test
+    func `sharedResetDescription is nil for a single quota`() {
+        let quotas = [
+            UsageQuota(
+                percentRemaining: 10,
+                quotaType: .weekly,
+                providerId: "claude",
+                resetsAt: Date().addingTimeInterval(86400)
+            )
+        ]
+
+        #expect(quotas.sharedResetDescription() == nil)
+    }
+
+    @Test
+    func `sharedResetDescription is nil when any quota lacks resetsAt`() {
+        let resetsAt = Date().addingTimeInterval(86400)
+        let quotas = [
+            UsageQuota(percentRemaining: 10, quotaType: .weekly, providerId: "claude", resetsAt: resetsAt),
+            UsageQuota(percentRemaining: 80, quotaType: .session, providerId: "claude")
+        ]
+
+        #expect(quotas.sharedResetDescription() == nil)
     }
 }

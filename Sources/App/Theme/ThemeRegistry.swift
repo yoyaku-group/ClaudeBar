@@ -118,6 +118,17 @@ public final class ThemeRegistry {
         return theme
     }
 
+    /// Import a ``TerminalColorScheme`` directly (e.g., from live iTerm2 profile reading).
+    /// Persists the scheme and registers the generated theme.
+    @discardableResult
+    public func importScheme(_ scheme: TerminalColorScheme) throws -> any AppThemeProvider {
+        try importedThemeStore.save(scheme)
+        let props = TerminalThemeGenerator.generate(from: scheme)
+        let theme = ImportedTerminalTheme(props: props, scheme: scheme)
+        register(theme)
+        return theme
+    }
+
     /// Remove an imported theme by its ID. Built-in themes are not affected.
     /// - Parameter id: The theme ID (e.g., `"imported-dracula"`).
     public func removeImportedTheme(id: String) {

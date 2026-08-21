@@ -48,7 +48,8 @@ struct ClaudeBarApp: App {
     init() {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
         let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
-        AppLog.ui.info("ClaudeBar v\(version) (\(build)) initializing...")
+        let provenance = BuildProvenance.current
+        AppLog.ui.info("ClaudeBar v\(version) (\(build)) initializing — git \(provenance.gitSHA), built \(provenance.builtAtUTC), dirty=\(provenance.isDirty)")
 
         // Create the shared settings repository (JSON-backed: ~/.claudebar/settings.json)
         // JSONSettingsRepository implements all sub-protocols:
@@ -293,60 +294,15 @@ struct ClaudeBarApp: App {
         }
     }
 
-    /// Detects isolated Claude config directories and registers them as
-    /// separate Claude accounts. Only runs when no Claude accounts are
-    /// currently configured, to avoid overwriting user edits.
+    /// Detects and validates isolated Claude config directories on first run.
+    /// Existing accounts are authoritative and are never replaced or pruned.
     static func seedClaudeAccountsIfNeeded(settingsRepository: any MultiAccountSettingsRepository) {
-        guard settingsRepository.accounts(forProvider: "claude").isEmpty else { return }
-
-        let home = NSHomeDirectory()
-        let fm = FileManager.default
-
-        var candidates: [(accountId: String, label: String, configDir: String, email: String?)] = []
-
-        // Default config at ~/.claude.json (CLAUDE_CONFIG_DIR unset).
-        let defaultJson = (home as NSString).appendingPathComponent(".claude.json")
-        if fm.fileExists(atPath: defaultJson) {
-            let resolver = ClaudeAccountInfoResolver(configURL: URL(fileURLWithPath: defaultJson))
-            let email = resolver.resolve()?.email
-            candidates.append((
-                accountId: "default",
-                label: "Default",
-                configDir: home,
-                email: email
-            ))
-        }
-
-        // Isolated directories like ~/.claude-admin, ~/.claude-bedrock, etc.
-        if let homeContents = try? fm.contentsOfDirectory(atPath: home) {
-            for item in homeContents where item.hasPrefix(".claude-") {
-                let configDir = (home as NSString).appendingPathComponent(item)
-                let jsonPath = (configDir as NSString).appendingPathComponent(".claude.json")
-                guard fm.fileExists(atPath: jsonPath) else { continue }
-                let resolver = ClaudeAccountInfoResolver(configURL: URL(fileURLWithPath: jsonPath))
-                let email = resolver.resolve()?.email
-                let accountId = item.replacingOccurrences(of: ".claude-", with: "")
-                candidates.append((
-                    accountId: accountId,
-                    label: accountId.capitalized,
-                    configDir: configDir,
-                    email: email
-                ))
-            }
-        }
-
-        // Deduplicate by accountId, keeping the first match.
-        var seen = Set<String>()
-        for candidate in candidates {
-            guard !seen.contains(candidate.accountId) else { continue }
-            seen.insert(candidate.accountId)
+        let existing = settingsRepository.accounts(forProvider: "claude")
+        let discovered = ClaudeAccountDiscovery().discover(existing: existing)
+        guard existing.isEmpty else { return }
+        for candidate in discovered {
             settingsRepository.addAccount(
-                ProviderAccountConfig(
-                    accountId: candidate.accountId,
-                    label: candidate.label,
-                    email: candidate.email,
-                    probeConfig: ["claudeConfigDir": candidate.configDir]
-                ),
+                candidate,
                 forProvider: "claude"
             )
         }
@@ -415,6 +371,29 @@ struct ClaudeBarApp: App {
             statusItemDriver.attach(statusItem)
         }
         .menuBarExtraStyle(.window)
+
+        // Standalone Settings window (opened from the popover's gear button).
+        // Hidden title bar: the sidebar runs the full window height and the
+        // traffic lights overlay its top — see SettingsWindowView.
+        Window("ClaudeBar Settings", id: "settings") {
+            Group {
+                #if ENABLE_SPARKLE
+                SettingsWindowView(monitor: monitor) { enabled in
+                    if enabled { startHookServer() } else { stopHookServer() }
+                }
+                .appThemeProvider(themeModeId: settings.themeMode)
+                .environment(\.sparkleUpdater, sparkleUpdater)
+                #else
+                SettingsWindowView(monitor: monitor) { enabled in
+                    if enabled { startHookServer() } else { stopHookServer() }
+                }
+                .appThemeProvider(themeModeId: settings.themeMode)
+                #endif
+            }
+        }
+        .windowStyle(.hiddenTitleBar)
+        .defaultSize(width: 980, height: 660)
+        .windowResizability(.contentMinSize)
     }
 
 }

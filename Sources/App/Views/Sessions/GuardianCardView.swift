@@ -62,6 +62,13 @@ struct GuardianCardView: View {
                 Text(headerBadge(state))
                     .font(theme.font(size: 10, weight: .semibold))
                     .foregroundStyle(statusColor)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(
+                        Capsule()
+                            .fill(statusColor.opacity(0.12))
+                            .overlay(Capsule().stroke(statusColor.opacity(0.4), lineWidth: 1))
+                    )
             }
         }
     }

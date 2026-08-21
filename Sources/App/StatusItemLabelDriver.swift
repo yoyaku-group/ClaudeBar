@@ -152,6 +152,13 @@ final class StatusItemLabelDriver {
     }
 
     private func currentLabelContent() -> LabelContent {
+        let menuBarSelection = monitor.menuBarSnapshotSelection(
+            providerId: settings.menuBarPercentageProviderId,
+            quotaKeys: [
+                settings.menuBarPercentageQuotaKey,
+                settings.menuBarSecondaryQuotaKey,
+            ]
+        )
         let freshLabel = monitor.menuBarLabel(
             providerId: settings.menuBarPercentageProviderId,
             primaryQuotaKey: settings.menuBarPercentageQuotaKey,
@@ -166,13 +173,12 @@ final class StatusItemLabelDriver {
         let label = freshLabel ?? lastKnownLabel(whenFreshIsMissing: freshLabel)
         let hasCountdownColon = label.map { !CountdownColon.ranges(in: $0.text).isEmpty } ?? false
 
-        // Email of the active multi-account profile (only when the selected
-        // provider is multi-account). Surfaced in the tooltip so two Claude
-        // profiles stay distinguishable from the menu bar alone.
+        // Email from the exact same account snapshot as the menu-bar quotas.
+        // Never use monitor.selectedProvider here: the configured menu-bar
+        // provider can differ from the open dropdown provider.
         let accountEmail: String? = {
-            guard let multi = monitor.selectedProvider as? any MultiAccountProvider,
-                  multi.accounts.count > 1 else { return nil }
-            return multi.activeAccount.email
+            guard let account = menuBarSelection?.account else { return nil }
+            return menuBarSelection?.snapshot.accountEmail ?? account.email
         }()
 
         return LabelContent(
@@ -301,23 +307,16 @@ final class StatusItemLabelDriver {
         }
 
         if content.glyphMode.showsText, let label = content.label {
-            // Dual-bar path takes priority over stacked text when both windows
-            // exist, the percent values are present, AND an inline email
-            // suffix is available — that's the "see your 2 quota windows +
-            // which Claude profile at a single glance" ask. Without a suffix
-            // (single-account provider, no email recorded) or without percent
-            // (percentage display off, dollar-based quota, no data yet), fall
-            // back to the stacked text renderer so the menu bar still works.
-            if content.stacked,
-               label.segments.count == 2,
-               let suffix = content.inlineEmailSuffix,
+            // Dual-bar path takes priority whenever both percentage values are
+            // available. The email suffix is useful context, not a prerequisite.
+            if Self.shouldRenderDualBars(stacked: content.stacked, segments: label.segments),
                let topPct = label.segments[0].percentRemaining,
                let bottomPct = label.segments[1].percentRemaining {
                 parts.append(StatusBarDualBarImageRenderer.image(
                     top: (topPct, theme.statusColor(for: label.segments[0].status)),
                     bottom: (bottomPct, theme.statusColor(for: label.segments[1].status)),
                     track: theme.progressTrack,
-                    emailSuffix: suffix,
+                    emailSuffix: content.inlineEmailSuffix,
                     emailSuffixColor: theme.textTertiary
                 ))
             } else if content.stacked, label.segments.count == 2 {
@@ -343,6 +342,18 @@ final class StatusItemLabelDriver {
         }
 
         return hStack(parts, spacing: 3)
+    }
+
+    /// Pure routing rule used by the renderer and AppTests. Account email is
+    /// deliberately absent: dual bars remain useful for single-account and
+    /// email-less providers.
+    static func shouldRenderDualBars(
+        stacked: Bool,
+        segments: [MenuBarLabel.Segment]
+    ) -> Bool {
+        stacked
+            && segments.count == 2
+            && segments.allSatisfy { $0.percentRemaining != nil }
     }
 
     /// Continuous green→amber→red tint for the cat's health, interpolated —
@@ -530,6 +541,7 @@ final class StatusItemLabelDriver {
         var isEnabled: Bool
         var seconds: Int
         var providerIds: [String]?
+        var allAccountsForProviderId: String?
     }
 
     /// Starts watching the refresh cadence/target settings and (re)starts the
@@ -549,8 +561,19 @@ final class StatusItemLabelDriver {
         return RefreshLoopKey(
             isEnabled: interval.isEnabled,
             seconds: interval.seconds ?? 0,
-            providerIds: backgroundRefreshProviderIds
+            providerIds: backgroundRefreshProviderIds,
+            allAccountsForProviderId: backgroundMultiAccountProviderId
         )
+    }
+
+    /// The configured menu-bar provider needs every account refreshed because
+    /// its label deliberately represents the worst matching account.
+    private var backgroundMultiAccountProviderId: String? {
+        let providerId = settings.menuBarPercentageProviderId
+        guard settings.menuBarPercentageEnabled || settings.menuBarDurationEnabled,
+              let multi = monitor.provider(for: providerId) as? any MultiAccountProvider,
+              multi.accounts.count > 1 else { return nil }
+        return providerId
     }
 
     /// While the dropdown is closed we only need the menu-bar provider(s)
@@ -576,7 +599,8 @@ final class StatusItemLabelDriver {
         AppLog.monitor.info("Background refresh starting (interval: \(key.seconds)s, providers: \(key.providerIds?.joined(separator: ",") ?? "selected"))")
         let stream = monitor.startMonitoring(
             interval: .seconds(key.seconds),
-            providerIds: key.providerIds
+            providerIds: key.providerIds,
+            allAccountsForProviderId: key.allAccountsForProviderId
         )
         streamConsumer = Task {
             // Each refresh tick imperatively forces a repaint. We can't rely on
@@ -838,8 +862,8 @@ enum StatusBarDualBarImageRenderer {
         track.setFill()
         trackPath.fill()
 
-        let clamped = min(max(percent, 0), 100) / 100
-        let fillWidth = max(barHeight, ceil(CGFloat(clamped) * barWidth))
+        let fillWidth = fillWidth(for: percent)
+        guard fillWidth > 0 else { return }
         let fillRect = NSRect(
             x: origin.x,
             y: origin.y,
@@ -849,6 +873,14 @@ enum StatusBarDualBarImageRenderer {
         let fillPath = NSBezierPath(roundedRect: fillRect, xRadius: barHeight / 2, yRadius: barHeight / 2)
         color.setFill()
         fillPath.fill()
+    }
+
+    /// Pixel-stable fill policy. Exactly 0% draws no fill; positive values get
+    /// one rounded-cap minimum so tiny non-zero quota remains visible.
+    static func fillWidth(for percent: Double) -> CGFloat {
+        let clamped = min(max(percent, 0), 100) / 100
+        guard clamped > 0 else { return 0 }
+        return max(barHeight, ceil(CGFloat(clamped) * barWidth))
     }
 }
 

@@ -180,26 +180,24 @@ public struct UsageQuota: Sendable, Equatable, Hashable, Comparable {
         }
     }
 
-    /// Returns the percentage to use for progress bar width based on the display mode.
-    /// - In `.remaining` mode: bar fills from right to left as quota depletes
-    /// - In `.used` mode: bar fills from left to right as quota is consumed
-    /// - In `.pace` mode: bar shows remaining (same as remaining mode)
+    /// Returns the percentage to use for progress bar width.
+    ///
+    /// The bar always fills left-to-right as quota is consumed (`percentUsed`),
+    /// regardless of display mode. The headline number still follows
+    /// `displayPercent`; bar color still follows remaining/status.
     public func displayProgressPercent(mode: UsageDisplayMode) -> Double {
         switch mode {
-        case .remaining: percentRemaining
-        case .used: percentUsed
-        case .pace: percentRemaining
+        case .remaining, .used, .pace: percentUsed
         }
     }
 
-    /// Returns the expected progress bar position based on time elapsed and display mode.
-    /// This represents where the bar "should be" if usage were perfectly on pace.
-    /// Returns nil when reset time is unknown.
+    /// Returns the expected progress bar position based on time elapsed.
+    /// This is the used-scale tick: where the bar should sit if usage were
+    /// spread evenly across the window. Returns nil when reset time is unknown.
     public func expectedProgressPercent(mode: UsageDisplayMode) -> Double? {
         guard let percentTimeElapsed else { return nil }
         switch mode {
-        case .remaining, .pace: return 100 - percentTimeElapsed
-        case .used: return percentTimeElapsed
+        case .remaining, .used, .pace: return percentTimeElapsed
         }
     }
 
@@ -269,16 +267,11 @@ public struct UsageQuota: Sendable, Equatable, Hashable, Comparable {
     }
 
     /// Tooltip copy explaining the pace tick mark under the progress bar.
-    /// Mode-aware: describes where the bar would sit if usage were spread
+    /// Describes where the used-fill bar would sit if usage were spread
     /// evenly across the window. Returns nil when reset time is unknown.
     public func paceTickHelp(mode: UsageDisplayMode) -> String? {
         guard let expected = expectedProgressPercent(mode: mode) else { return nil }
-        let base = switch mode {
-        case .used:
-            "Pace marker: steady usage would have used ~\(Int(expected.rounded()))% by now"
-        case .remaining, .pace:
-            "Pace marker: steady usage would leave ~\(Int(expected.rounded()))% remaining by now"
-        }
+        let base = "Pace marker: steady usage would have used ~\(Int(expected.rounded()))% by now"
         guard let insight = paceInsight else { return base + "." }
         return base + " — " + insight.prefix(1).lowercased() + insight.dropFirst() + "."
     }
@@ -344,5 +337,23 @@ public struct UsageQuota: Sendable, Equatable, Hashable, Comparable {
 
     public static func < (lhs: UsageQuota, rhs: UsageQuota) -> Bool {
         lhs.percentRemaining < rhs.percentRemaining
+    }
+}
+
+public extension Collection where Element == UsageQuota {
+    /// Shared reset countdown when every quota resets at the same time.
+    ///
+    /// Returns a single `resetTimestampDescription` when there are at least two
+    /// quotas, every quota has a `resetsAt`, and those timestamps sit within
+    /// 60 seconds of each other. Otherwise nil — callers should keep per-card clocks.
+    func sharedResetDescription() -> String? {
+        guard count >= 2 else { return nil }
+        let dates = compactMap(\.resetsAt)
+        guard dates.count == count,
+              let earliest = dates.min(),
+              let latest = dates.max(),
+              latest.timeIntervalSince(earliest) <= 60
+        else { return nil }
+        return first?.resetTimestampDescription
     }
 }

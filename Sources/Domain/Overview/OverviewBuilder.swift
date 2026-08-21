@@ -17,9 +17,8 @@ public enum OverviewBuilder {
         providers.flatMap { provider -> [ProviderSnapshot] in
             if let multi = provider as? any MultiAccountProvider, !multi.accounts.isEmpty {
                 return multi.accounts.map { account in
+                    let refreshState = multi.accountRefreshStates[account.accountId] ?? .idle
                     guard let snapshot = multi.accountSnapshots[account.accountId] else {
-                        // Account registered but never probed yet — keep the row
-                        // visible with a syncing state instead of hiding it.
                         return ProviderSnapshot(
                             id: "\(provider.id)|\(account.accountId)",
                             providerId: provider.id,
@@ -27,7 +26,8 @@ public enum OverviewBuilder {
                             accountLabel: account.displayName,
                             accountEmail: account.email,
                             windows: [],
-                            isSyncing: true
+                            isSyncing: refreshState == .refreshing,
+                            errorMessage: refreshState.errorMessage
                         )
                     }
                     return row(
@@ -36,7 +36,9 @@ public enum OverviewBuilder {
                         rowId: "\(provider.id)|\(account.accountId)",
                         accountLabel: multi.accounts.count > 1 ? account.displayName : nil,
                         accountEmail: multi.accounts.count > 1 ? account.email : nil,
-                        snapshot: snapshot
+                        snapshot: snapshot,
+                        isSyncing: refreshState == .refreshing,
+                        errorMessage: refreshState.errorMessage
                     )
                 }
             }
@@ -172,15 +174,19 @@ public enum OverviewBuilder {
         rowId: String,
         accountLabel: String?,
         accountEmail: String? = nil,
-        snapshot: UsageSnapshot
+        snapshot: UsageSnapshot,
+        isSyncing: Bool = false,
+        errorMessage: String? = nil
     ) -> ProviderSnapshot {
-        rowFromQuotas(
+        ProviderSnapshot(
+            id: rowId,
             providerId: providerId,
             providerName: providerName,
-            rowId: rowId,
             accountLabel: accountLabel,
             accountEmail: accountEmail,
-            quotas: snapshot.quotas
+            windows: snapshot.quotas.map(windowSnapshot(rowId: rowId)),
+            isSyncing: isSyncing,
+            errorMessage: errorMessage
         )
     }
 
@@ -220,5 +226,12 @@ public enum OverviewBuilder {
             }
             return (0, resetsAt.timeIntervalSince1970)
         }
+    }
+}
+
+private extension ProviderAccountRefreshState {
+    var errorMessage: String? {
+        guard case let .failed(message) = self else { return nil }
+        return message
     }
 }
