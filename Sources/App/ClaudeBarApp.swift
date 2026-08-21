@@ -64,96 +64,112 @@ struct ClaudeBarApp: App {
         // was wired (Ben 2026-08-19: dashboard couldn't tell which Claude
         // account was at 0% because the email was missing).
         ClaudeBarApp.backfillClaudeAccountEmailsIfNeeded(settingsRepository: settingsRepository)
+        ClaudeBarApp.bindClaudeRouterAliasesIfNeeded(settingsRepository: settingsRepository)
 
-        // Create all providers with their probes (rich domain models)
-        // Each provider manages its own isEnabled state (persisted via ProviderSettingsRepository)
-        // Each probe checks isAvailable() for credentials/prerequisites
-        let repository = AIProviders(providers: [
-            ClaudeProvider(
-                cliProbe: ClaudeUsageProbe(),
-                apiProbe: ClaudeAPIUsageProbe(),
-                passProbe: ClaudePassProbe(),
+        // llm-router is the only quota/catalog authority for the eight YOYAKU
+        // routing providers. One shared actor reads its versioned v2 snapshot;
+        // every provider remains a first-class ClaudeBar row without issuing a
+        // second API/CLI quota probe.
+        let routerSnapshotClient = LLMRouterSnapshotClient()
+        let routerProviders: [any AIProvider] = [
+            RouterBackedProvider(
+                id: "claude",
+                name: "Claude",
+                routerProviderId: "claude",
+                cliCommand: "claude",
+                dashboardURL: URL(string: "https://console.anthropic.com/settings/billing"),
+                statusPageURL: URL(string: "https://status.anthropic.com"),
+                source: routerSnapshotClient,
                 settingsRepository: settingsRepository,
                 dailyUsageAnalyzer: ClaudeDailyUsageAnalyzer(),
-                cliProbeFactory: { configDir in
-                    if let configDir {
-                        return ClaudeUsageProbe(configDirectory: configDir)
-                    }
-                    return ClaudeUsageProbe()
-                },
-                apiProbeFactory: { configDir in
-                    if let configDir {
-                        return ClaudeAPIUsageProbe(configDirectory: configDir)
-                    }
-                    return ClaudeAPIUsageProbe()
-                }
+                passProbe: ClaudePassProbe(),
+                guestPassEnabled: true
             ),
-            CodexProvider(
-                rpcProbe: CodexUsageProbe(),
-                apiProbe: CodexAPIUsageProbe(),
+            RouterBackedProvider(
+                id: "codex",
+                name: "Codex",
+                routerProviderId: "codex",
+                cliCommand: "codex",
+                dashboardURL: URL(string: "https://platform.openai.com/usage"),
+                statusPageURL: URL(string: "https://status.openai.com"),
+                source: routerSnapshotClient,
                 settingsRepository: settingsRepository
             ),
+            RouterBackedProvider(
+                id: "kimi",
+                name: "Kimi",
+                routerProviderId: "kimi",
+                cliCommand: "kimi",
+                dashboardURL: URL(string: "https://www.kimi.com/code/console"),
+                source: routerSnapshotClient,
+                settingsRepository: settingsRepository
+            ),
+            RouterBackedProvider(
+                id: "qwen",
+                name: "Qwen",
+                routerProviderId: "qwen_personal_pro",
+                cliCommand: "qwen",
+                dashboardURL: URL(string: "https://modelstudio.console.alibabacloud.com"),
+                source: routerSnapshotClient,
+                settingsRepository: settingsRepository
+            ),
+            RouterBackedProvider(
+                id: "glm",
+                name: "GLM",
+                routerProviderId: "glm_pro",
+                cliCommand: "claude",
+                dashboardURL: URL(string: "https://z.ai/subscribe"),
+                statusPageURL: URL(string: "https://docs.z.ai/devpack/faq"),
+                source: routerSnapshotClient,
+                settingsRepository: settingsRepository
+            ),
+            RouterBackedProvider(
+                id: "minimax",
+                name: "MiniMax",
+                routerProviderId: "minimax_max",
+                cliCommand: "minimax",
+                dashboardURL: URL(string: "https://platform.minimax.io"),
+                source: routerSnapshotClient,
+                settingsRepository: settingsRepository
+            ),
+            RouterBackedProvider(
+                id: "bedrock",
+                name: "AWS Bedrock",
+                routerProviderId: "bedrock",
+                cliCommand: "aws",
+                dashboardURL: URL(string: "https://console.aws.amazon.com/bedrock/home"),
+                statusPageURL: URL(string: "https://health.aws.amazon.com/health/status"),
+                source: routerSnapshotClient,
+                settingsRepository: settingsRepository
+            ),
+            RouterBackedProvider(
+                id: "local",
+                name: "Local",
+                routerProviderId: "local",
+                cliCommand: "",
+                source: routerSnapshotClient,
+                settingsRepository: settingsRepository
+            ),
+        ]
+
+        // Providers outside the routing catalog keep their native probes.
+        let repository = AIProviders(providers: routerProviders + [
             GeminiProvider(probe: GeminiUsageProbe(), settingsRepository: settingsRepository),
             AntigravityProvider(probe: AntigravityUsageProbe(), settingsRepository: settingsRepository),
-            // Ecosystem quota SSOT: Qwen (CGU-mandated manual quota — no API
-            // polling, ever) + any provider whose native probe is disabled.
-            // Natively-enabled providers are skipped so rows never duplicate.
-            // Phase 0c (2026-08-19): qwen_personal_pro → alibaba entry added so
-            // the LLMRouterProvider stops emitting its own qwen_personal_pro row
-            // when the native Alibaba probe is enabled. Without this, ClaudeBar
-            // shows the same Qwen plan twice: once via the LLM-router adapter
-            // and once via AlibabaUsageProbe (which currently fails on
-            // ConsoleNeedLogin). Cookie-based source (Phase 2b) is a separate
-            // concern — the skipSlugs entry alone fixes the duplicate today.
-            LLMRouterProvider(
-                probe: LLMRouterStateProbe(
-                    skipSlugs: Set([
-                        ("glm_pro", "zai"),
-                        ("minimax_max", "minimax"),
-                        ("kimi", "kimi"),
-                        ("bedrock", "bedrock"),
-                        ("qwen_personal_pro", "alibaba"),
-                    ]
-                    .filter { settingsRepository.isEnabled(forProvider: $0.1, defaultValue: true) }
-                    .map(\.0))
-                ),
-                settingsRepository: settingsRepository
-            ),
-            ZaiProvider(
-                probe: ZaiUsageProbe(settingsRepository: settingsRepository),
-                settingsRepository: settingsRepository
-            ),
             CopilotProvider(
                 billingProbe: CopilotUsageProbe(settingsRepository: settingsRepository),
                 internalProbe: CopilotInternalAPIProbe(settingsRepository: settingsRepository),
                 settingsRepository: settingsRepository
             ),
-            BedrockProvider(
-                probe: BedrockUsageProbe(settingsRepository: settingsRepository),
-                settingsRepository: settingsRepository
-            ),
             AmpCodeProvider(probe: AmpCodeUsageProbe(), settingsRepository: settingsRepository),
-            KimiProvider(
-                cliProbe: KimiCLIUsageProbe(),
-                apiProbe: KimiUsageProbe(),
-                settingsRepository: settingsRepository
-            ),
             KiroProvider(probe: KiroUsageProbe(), settingsRepository: settingsRepository),
             CursorProvider(probe: CursorUsageProbe(), settingsRepository: settingsRepository),
-            MiniMaxProvider(
-                probe: MiniMaxUsageProbe(settingsRepository: settingsRepository),
-                settingsRepository: settingsRepository
-            ),
             DeepSeekProvider(
                 probe: DeepSeekUsageProbe(settingsRepository: settingsRepository),
                 settingsRepository: settingsRepository
             ),
             VercelProvider(
                 probe: VercelUsageProbe(settingsRepository: settingsRepository),
-                settingsRepository: settingsRepository
-            ),
-            AlibabaProvider(
-                probe: AlibabaUsageProbe(settingsRepository: settingsRepository, cookieProvider: AlibabaBrowserCookieProvider()),
                 settingsRepository: settingsRepository
             ),
             MistralProvider(
@@ -340,12 +356,15 @@ struct ClaudeBarApp: App {
         for candidate in candidates {
             guard !seen.contains(candidate.accountId) else { continue }
             seen.insert(candidate.accountId)
+            var probeConfig = ["claudeConfigDir": candidate.configDir]
+            if candidate.accountId == "default" { probeConfig["routerAlias"] = "WEBMASTER" }
+            if candidate.accountId == "tech" { probeConfig["routerAlias"] = "TECH" }
             settingsRepository.addAccount(
                 ProviderAccountConfig(
                     accountId: candidate.accountId,
                     label: candidate.label,
                     email: candidate.email,
-                    probeConfig: ["claudeConfigDir": candidate.configDir]
+                    probeConfig: probeConfig
                 ),
                 forProvider: "claude"
             )
@@ -374,6 +393,30 @@ struct ClaudeBarApp: App {
                     email: email,
                     organization: config.organization,
                     probeConfig: config.probeConfig
+                ),
+                forProvider: "claude"
+            )
+        }
+    }
+
+    /// One-time local metadata binding for the two established YOYAKU Claude
+    /// profiles. The roster itself still comes exclusively from llm-router;
+    /// this only lets ClaudeBar attach locally-resolved email metadata to the
+    /// shared aliases without publishing those emails upstream.
+    static func bindClaudeRouterAliasesIfNeeded(settingsRepository: any MultiAccountSettingsRepository) {
+        let aliasesByLocalId = ["default": "WEBMASTER", "webmaster": "WEBMASTER", "tech": "TECH"]
+        for config in settingsRepository.accounts(forProvider: "claude") {
+            guard config.probeConfig["routerAlias"] == nil,
+                  let alias = aliasesByLocalId[config.accountId.lowercased()] else { continue }
+            var probeConfig = config.probeConfig
+            probeConfig["routerAlias"] = alias
+            settingsRepository.updateAccount(
+                ProviderAccountConfig(
+                    accountId: config.accountId,
+                    label: config.label,
+                    email: config.email,
+                    organization: config.organization,
+                    probeConfig: probeConfig
                 ),
                 forProvider: "claude"
             )

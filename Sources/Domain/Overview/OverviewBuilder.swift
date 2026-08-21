@@ -17,9 +17,13 @@ public enum OverviewBuilder {
         providers.flatMap { provider -> [ProviderSnapshot] in
             if let multi = provider as? any MultiAccountProvider, !multi.accounts.isEmpty {
                 return multi.accounts.map { account in
+                    let accountError = (provider as? any GroupErrorReporting)?
+                        .lastGroupErrors[account.accountId]
+                        ?? (provider as? any GroupErrorReporting)?
+                        .lastGroupErrors[account.displayName]
                     guard let snapshot = multi.accountSnapshots[account.accountId] else {
-                        // Account registered but never probed yet — keep the row
-                        // visible with a syncing state instead of hiding it.
+                        // Missing/expired expected accounts stay visible as
+                        // warnings; they must not become fake healthy rows.
                         return ProviderSnapshot(
                             id: "\(provider.id)|\(account.accountId)",
                             providerId: provider.id,
@@ -27,7 +31,8 @@ public enum OverviewBuilder {
                             accountLabel: account.displayName,
                             accountEmail: account.email,
                             windows: [],
-                            isSyncing: true
+                            isSyncing: provider.isSyncing,
+                            errorMessage: accountError ?? provider.lastError?.localizedDescription
                         )
                     }
                     return row(
@@ -36,7 +41,8 @@ public enum OverviewBuilder {
                         rowId: "\(provider.id)|\(account.accountId)",
                         accountLabel: multi.accounts.count > 1 ? account.displayName : nil,
                         accountEmail: multi.accounts.count > 1 ? account.email : nil,
-                        snapshot: snapshot
+                        snapshot: snapshot,
+                        errorMessage: accountError
                     )
                 }
             }
@@ -172,15 +178,26 @@ public enum OverviewBuilder {
         rowId: String,
         accountLabel: String?,
         accountEmail: String? = nil,
-        snapshot: UsageSnapshot
+        snapshot: UsageSnapshot,
+        errorMessage: String? = nil
     ) -> ProviderSnapshot {
-        rowFromQuotas(
+        let base = rowFromQuotas(
             providerId: providerId,
             providerName: providerName,
             rowId: rowId,
             accountLabel: accountLabel,
             accountEmail: accountEmail,
             quotas: snapshot.quotas
+        )
+        return ProviderSnapshot(
+            id: base.id,
+            providerId: base.providerId,
+            providerName: base.providerName,
+            accountLabel: base.accountLabel,
+            accountEmail: base.accountEmail,
+            windows: base.windows,
+            isSyncing: base.isSyncing,
+            errorMessage: errorMessage
         )
     }
 

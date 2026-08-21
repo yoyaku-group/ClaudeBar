@@ -36,7 +36,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .general: ["launch", "login", "overview", "daily usage", "burn rate", "threshold"]
         case .appearance: ["theme", "dark", "light", "cli", "christmas", "import"]
         case .menuBar: ["percentage", "duration", "quota display", "stacked", "status bar"]
-        case .providers: ["claude", "codex", "gemini", "copilot", "zai", "bedrock", "kimi", "minimax", "enable"]
+        case .providers: ["claude", "codex", "gemini", "copilot", "glm", "qwen", "bedrock", "kimi", "minimax", "local", "llm-router", "enable"]
         case .syncAlerts: ["background", "refresh", "interval", "notification"]
         case .hooks: ["claude code", "session", "install"]
         case .updates: ["sparkle", "beta", "version", "check"]

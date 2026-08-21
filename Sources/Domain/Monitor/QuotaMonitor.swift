@@ -87,6 +87,14 @@ public final class QuotaMonitor {
             return
         }
 
+        if let multi = provider as? any MultiAccountProvider {
+            await multi.refreshAllAccounts(kind)
+            if let snapshot = multi.snapshot {
+                await handleSnapshotUpdate(provider: provider, snapshot: snapshot)
+            }
+            return
+        }
+
         do {
             let snapshot = try await provider.refresh(kind)
             await handleSnapshotUpdate(provider: provider, snapshot: snapshot)

@@ -14,17 +14,16 @@
 
 ## R1 — Kimi (K-I-M-I) must be visible
 
-Kimi is a first-class provider (line 136 of `Sources/App/ClaudeBarApp.swift`,
-`KimiProvider` with `cliProbe` + `apiProbe`). The popup must show Kimi in
-the same tab strip as Claude / Codex / Z.ai / Amp.
+Kimi is a first-class `RouterBackedProvider`. The popup must show Kimi in
+the same provider strip as Claude, Codex, Qwen, GLM, MiniMax, Bedrock, and
+Local.
 
-- Detection : grep `Sources/App/ClaudeBarApp.swift` for `KimiProvider`.
+- Detection: inspect the `routerProviders` array in `ClaudeBarApp.swift`.
   If absent → missing.
-- Diagnostic UI : `Sources/App/Views/Settings/KimiConfigCard.swift` shows
-  a warning banner when `KIMI_AUTH_TOKEN` env var + `kimi-auth` cookie
-  are both missing.
-- Probe mode default : `.api` (CLI `/usage` is dead since
-  `kimi-code 0.37.1`). See Phase 6a commit (`ab72716`).
+- Credential repair is upstream: `kimi login --region global` or
+  `KIMI_CODE_API_KEY` for the CodexBar broker path. `KIMI_AUTH_TOKEN` and
+  browser-cookie settings belong to the retired direct ClaudeBar probe and
+  are not the router contract.
 
 **Failure mode** : if Kimi is missing from the popup tabs, the build is
 stale — Kimi is registered, the installed `.app` is older than the commit
@@ -106,9 +105,8 @@ during the pre-Phase-8 transition.
 
 ### Implementation contract
 
-- `ClaudeProvider` already conforms to `MultiAccountProvider` protocol
-  with `accounts: [ProviderAccount]` + `accountSnapshots: [String: UsageSnapshot]`
-  (line 56 + line 66 of `Sources/Domain/Provider/Claude/ClaudeProvider.swift`).
+- `RouterBackedProvider` conforms to `MultiAccountProvider` and publishes
+  `accounts` + `accountSnapshots` from llm-router v2 aliases.
 - `OverviewBuilder.swift:18` already iterates `multi.accounts` and emits
   one `ProviderSnapshot` per account with `accountLabel` + `accountEmail`.
 - `ProviderSnapshot` model already has `accountLabel: String?` +
@@ -118,20 +116,20 @@ during the pre-Phase-8 transition.
   Phase 8** : iterate `multi.accounts` and emit a `selectedAccountId`
   state, render sub-tabs within the provider header.
 
-### Account enumeration depends on `claude auth list`
+### Account enumeration depends on the llm-router v2 roster
 
-Verify with `claude auth list` in terminal how many accounts Claude CLI
-exposes. If CLI exposes 1 account only, fallback shows 1 row.
+Verify with `llm-router status --format json-v2`. Expected aliases remain
+visible even when a credential is missing; the missing identity gets an error
+row while healthy identities remain usable.
 
 Phase 1.5 commits (multi-account infrastructure already shipped) :
 `637c3a5` (ClaudeAccountInfoResolver wired), `23cc80c` (`accountEmail`
 field), `4c750f1` (monospaced email render), `67cb4e3` (tooltip prepend).
 Old build `06a3939` predates these — visible regression vs new build.
 
-If `Claude CLI auth list` returns 1 account only, the popup still shows
-1 row but the row is now email-disambiguated. Future fix : add a
-multi-account login flow in `ClaudeProvider` to detect/seed accounts
-not yet in CLI's `auth list`.
+Account membership and authentication are intentionally not editable in
+ClaudeBar. Local emails stay private in `~/.claudebar/settings.json` and join
+to upstream aliases through `probeConfig.routerAlias`.
 
 ## R4 — SF Symbols / polished glyphs (no red dots)
 
@@ -162,7 +160,7 @@ already animates a tint-interpolated cat icon based on worst-health
 across providers. After Phase 8 (single centralized icon, gated on P4
 retirement), this becomes the ONLY icon in the menu-bar.
 
-Phase 4 retirement checklist (do NOT execute before Phase 4 timeline) :
+Retirement checklist (do NOT execute before a seven-day green soak):
 1. Confirm `app.overviewModeEnabled = true` default.
 2. `rm ~/repos/llm-router/integrations/swiftbar/yoyaku-quotas.5m.sh`
    (symlink).
@@ -198,14 +196,10 @@ Required patterns :
 
 ## Build / install reminder
 
-All R1–R7 changes are committed on branch
-`feat/yoyaku-multi-profile` (locally, NOT pushed as of 2026-08-20).
-Phase 4 retirement requires Ben's push gesture (sandbox blocks SSH + gh
-token expired on the autopilot session) + CI vert + 1 week soak.
-
-Until the build is reinstalled, Ben sees the **old build** (`06a3939`)
-which predates R2/R3/R4. The Kimi row from R1 is also old-build-stale
-because `KimiProvider` was registered after `06a3939`.
+The multi-profile history and current upstream line are reconciled on the
+YOYAKU integration branch. Production cutover still requires green CI, a
+signed/notarized 2.0.0 artifact, atomic install/rollback verification, and a
+seven-day soak before retiring SwiftBar/RunCat.
 
 ## Reference screenshots (Ben's actual visible state 2026-08-20)
 

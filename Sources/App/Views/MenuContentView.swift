@@ -106,7 +106,7 @@ struct MenuContentView: View {
             }
 
             // Share Pass Overlay
-            if showSharePass, let claudeProvider = selectedProvider as? ClaudeProvider,
+            if showSharePass, let claudeProvider = selectedProvider as? any ClaudeSupplementProviding,
                let guestPass = claudeProvider.guestPass {
                 SharePassOverlay(pass: guestPass) {
                     withAnimation(.easeInOut(duration: 0.2)) {
@@ -116,7 +116,7 @@ struct MenuContentView: View {
             }
 
             // Share Pass Error Overlay
-            if let claudeProvider = selectedProvider as? ClaudeProvider,
+            if let claudeProvider = selectedProvider as? any ClaudeSupplementProviding,
                let passError = claudeProvider.passError {
                 SharePassErrorOverlay(message: passError.localizedDescription) {
                     withAnimation(.easeInOut(duration: 0.2)) {
@@ -818,7 +818,7 @@ struct MenuContentView: View {
             Spacer()
 
             // Share Button (Claude only) - icon only
-            if let claudeProvider = selectedProvider as? ClaudeProvider,
+            if let claudeProvider = selectedProvider as? any ClaudeSupplementProviding,
                claudeProvider.supportsGuestPasses {
                 let isFetchingPasses = claudeProvider.isFetchingPasses
                 Button {
@@ -900,42 +900,18 @@ struct MenuContentView: View {
 
     /// Refresh all enabled providers concurrently
     private func refreshAllEnabled() async {
-        await withTaskGroup(of: Void.self) { group in
-            // The `isSyncing` guard reads main-actor provider state, so evaluate
-            // it here on the main actor (this closure inherits the caller's
-            // isolation). Each child task then awaits `refresh()`, whose heavy
-            // probe work still suspends off-main, keeping the refreshes concurrent.
-            for provider in monitor.enabledProviders where !provider.isSyncing {
-                group.addTask {
-                    do {
-                        try await provider.refresh()
-                    } catch {
-                        // Provider stores error in lastError
-                    }
-                }
-            }
-        }
+        await monitor.refreshAll()
     }
 
     /// Refresh a specific provider by ID
     private func refresh(providerId: String) async {
-        guard let provider = monitor.provider(for: providerId) else {
-            return
-        }
-
-        // Provider.isSyncing is observable - prevents duplicate refreshes
-        guard !provider.isSyncing else { return }
-
-        do {
-            try await provider.refresh()
-        } catch {
-            // Provider stores error in lastError
-        }
+        guard monitor.provider(for: providerId)?.isSyncing != true else { return }
+        await monitor.refresh(providerId: providerId)
     }
 
     /// Fetch guest passes and show the share view
     private func fetchAndShowPasses() async {
-        guard let claudeProvider = selectedProvider as? ClaudeProvider else {
+        guard let claudeProvider = selectedProvider as? any ClaudeSupplementProviding else {
             return
         }
 

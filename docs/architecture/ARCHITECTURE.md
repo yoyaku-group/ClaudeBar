@@ -10,7 +10,9 @@ ClaudeBar follows a **layered architecture** with clear separation of concerns:
 - **Infrastructure Layer** - Technical implementations (CLI, network, storage)
 - **App Layer** - SwiftUI views that consume domain directly
 
-The key principle is **QuotaMonitor as Single Source of Truth** - all provider state flows through this central actor.
+The key UI principle is **QuotaMonitor as the in-process state owner**. In the
+YOYAKU distribution, `llm-router` is the upstream quota/catalog/routing SSOT for
+Claude, Codex, Kimi, Qwen, GLM, MiniMax, Bedrock, and Local.
 
 ## Architecture Diagram
 
@@ -49,6 +51,11 @@ The key principle is **QuotaMonitor as Single Source of Truth** - all provider s
 │  ├── isSyncing: Bool                                                │
 │  └── refresh() async throws -> UsageSnapshot                        │
 │                                                                      │
+│  RouterBackedProvider - first-class YOYAKU quota provider           │
+│  ├── one instance per stable ClaudeBar provider ID                  │
+│  ├── MultiAccountProvider roster from llm-router aliases            │
+│  └── account warnings do not erase healthy account capacity         │
+│                                                                      │
 │  Repository Protocols (ISP - Interface Segregation Principle)        │
 │  ├── ProviderSettingsRepository - base: isEnabled state             │
 │  ├── ZaiSettingsRepository: ProviderSettingsRepository              │
@@ -68,17 +75,18 @@ The key principle is **QuotaMonitor as Single Source of Truth** - all provider s
 ┌─────────────────────────────────────────────────────────────────────┐
 │                     INFRASTRUCTURE LAYER                             │
 │                                                                      │
-│  CLI Probes (Sources/Infrastructure/)                               │
-│  ├── ClaudeUsageProbe - probes `claude /usage` (CLI + API)          │
-│  ├── CodexUsageProbe - probes Codex via RPC/TTY (RPC + API)         │
+│  YOYAKU quota snapshot adapter                                      │
+│  ├── LLMRouterSnapshotClient - `status --format json-v2`            │
+│  ├── validates schema version + normalized 0...1 fractions          │
+│  ├── coalesces concurrent consumers into one subprocess             │
+│  └── returns last-good data with explicit stale metadata            │
+│                                                                      │
+│  Native probes for providers outside the router catalog            │
 │  ├── GeminiUsageProbe - probes Gemini CLI + API                     │
 │  ├── CopilotUsageProbe - probes GitHub API with token               │
 │  ├── AntigravityUsageProbe - probes local Antigravity server        │
-│  ├── ZaiUsageProbe - probes Z.ai API via Claude config              │
-│  ├── BedrockUsageProbe - probes AWS Bedrock API                     │
 │  ├── AmpCodeUsageProbe - probes Amp Code CLI                        │
-│  ├── KimiCLIUsageProbe - probes `kimi` CLI with /usage (CLI mode)   │
-│  └── KimiUsageProbe - probes Kimi HTTP API (API mode)               │
+│  └── extension/native probes for non-routing providers              │
 │                                                                      │
 │  Storage (Sources/Infrastructure/Storage/)                          │
 │  ├── AIProviders - implements AIProviderRepository                  │
@@ -135,19 +143,41 @@ public struct UsageQuota: Sendable, Equatable {
 
 ### 2. Single Source of Truth
 
-`QuotaMonitor` owns all provider state. Views read from it, never modify state directly.
+`QuotaMonitor` owns all live UI state. Views read from it, never modify state
+directly. It does not become a second quota authority.
 
 ```swift
 // QuotaMonitor is the single source of truth
-public actor QuotaMonitor {
+@MainActor
+@Observable
+public final class QuotaMonitor {
     private let providers: AIProviders  // Hidden - use delegation methods
 
-    // Delegation methods (nonisolated for UI access)
-    public nonisolated var allProviders: [any AIProvider]
-    public nonisolated var enabledProviders: [any AIProvider]
-    public nonisolated func provider(for id: String) -> (any AIProvider)?
+    // Main-actor delegation consumed directly by SwiftUI
+    public var allProviders: [any AIProvider]
+    public var enabledProviders: [any AIProvider]
+    public func provider(for id: String) -> (any AIProvider)?
 }
 ```
+
+For the YOYAKU routing catalog, the authority boundary is:
+
+```
+provider APIs / credential CLIs
+        │
+        ▼
+llm-router normalized snapshot v2 (remaining_pct = 0...1)
+        │ one shared, validated read
+        ▼
+RouterBackedProvider (converts once to UsageQuota = 0...100)
+        │
+        ▼
+QuotaMonitor → SwiftUI
+```
+
+Aliases are shared by `llm-router`; emails and local labels remain in
+`~/.claudebar/settings.json` and join only through explicit `routerAlias`
+metadata. ClaudeBar never mutates the upstream credential roster.
 
 ### 3. Repository Pattern with ISP (Interface Segregation Principle)
 
@@ -273,17 +303,20 @@ User clicks Refresh
 QuotaMonitor.refreshAll()
         │
         ▼
-For each enabled provider:
-    provider.refresh()
+For each enabled provider
+        │
+        ├─ RouterBackedProvider ─→ refreshAllAccounts(kind)
+        │                              │
+        │                              ▼
+        │                         shared snapshot client
+        │
+        └─ other provider ──────→ native provider.refresh(kind)
         │
         ▼
-    probe.probe() → CLI/API call
+Router path: one coalesced `llm-router status --format json-v2`
         │
         ▼
-    Parse response → UsageSnapshot
-        │
-        ▼
-    provider.snapshot = newSnapshot
+    validate + map provider/accounts → UsageSnapshot(s)
         │
         ▼
 SwiftUI observes change → UI updates
@@ -318,6 +351,7 @@ Sources/
 │   ├── Provider/
 │   │   ├── AIProvider.swift         # Protocol
 │   │   ├── AIProviders.swift        # Repository protocol
+│   │   ├── LLMRouter/               # Snapshot contract + router providers
 │   │   ├── ClaudeProvider.swift     # Rich domain model
 │   │   ├── CopilotProvider.swift    # Uses CopilotSettingsRepository
 │   │   ├── ZaiProvider.swift        # Uses ZaiSettingsRepository
@@ -332,6 +366,7 @@ Sources/
 │
 ├── Infrastructure/                  # Technical implementations
 │   ├── CLI/                         # Probe implementations
+│   ├── LLMRouter/                   # Versioned snapshot client
 │   ├── Storage/                     # Repository implementations
 │   ├── Adapters/                    # 3rd-party wrappers (no coverage)
 │   ├── Network/                     # HTTP abstraction

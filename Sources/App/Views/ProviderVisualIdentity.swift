@@ -531,6 +531,19 @@ extension AIProvider {
     }
 }
 
+// Router-backed providers are intentionally one concrete domain type. Their
+// first-class visual identity is selected by stable ClaudeBar provider ID.
+extension RouterBackedProvider: ProviderVisualIdentity {
+    public var symbolIcon: String { ProviderVisualIdentityLookup.symbolIcon(for: id) }
+    public var iconAssetName: String { ProviderVisualIdentityLookup.iconAssetName(for: id) }
+    public func themeColor(for scheme: ColorScheme) -> Color {
+        ProviderVisualIdentityLookup.color(for: id, scheme: scheme)
+    }
+    public func themeGradient(for scheme: ColorScheme) -> LinearGradient {
+        ProviderVisualIdentityLookup.gradient(for: id, scheme: scheme)
+    }
+}
+
 // MARK: - Static Provider Identity Lookup
 
 /// Static helpers to look up provider visual identity by ID string.
@@ -559,7 +572,7 @@ enum ProviderVisualIdentityLookup {
             return scheme == .dark
                 ? Color(red: 0.72, green: 0.35, blue: 0.85)
                 : Color(red: 0.58, green: 0.22, blue: 0.72)
-        case "zai":
+        case "glm", "zai":
             return scheme == .dark
                 ? Color(red: 0.35, green: 0.60, blue: 1.0)
                 : Color(red: 0.23, green: 0.51, blue: 0.96)
@@ -584,6 +597,14 @@ enum ProviderVisualIdentityLookup {
             return scheme == .dark
                 ? Color(red: 0.91, green: 0.27, blue: 0.42)
                 : Color(red: 0.82, green: 0.20, blue: 0.35)
+        case "qwen", "alibaba":
+            return scheme == .dark
+                ? Color(red: 1.0, green: 0.47, blue: 0.0)
+                : Color(red: 0.90, green: 0.38, blue: 0.0)
+        case "local":
+            return scheme == .dark
+                ? Color(red: 0.40, green: 0.82, blue: 0.58)
+                : Color(red: 0.20, green: 0.60, blue: 0.38)
         case "deepseek":
             return scheme == .dark
                 ? Color(red: 0.42, green: 0.52, blue: 1.0)
@@ -644,7 +665,7 @@ enum ProviderVisualIdentityLookup {
             secondaryColor = scheme == .dark
                 ? Color(red: 0.45, green: 0.25, blue: 0.75)
                 : Color(red: 0.35, green: 0.15, blue: 0.65)
-        case "zai":
+        case "glm", "zai":
             secondaryColor = scheme == .dark
                 ? Color(red: 0.30, green: 0.45, blue: 0.85)
                 : Color(red: 0.20, green: 0.35, blue: 0.75)
@@ -668,6 +689,14 @@ enum ProviderVisualIdentityLookup {
             secondaryColor = scheme == .dark
                 ? Color(red: 0.96, green: 0.53, blue: 0.24)
                 : Color(red: 0.86, green: 0.43, blue: 0.14)
+        case "qwen", "alibaba":
+            secondaryColor = scheme == .dark
+                ? Color(red: 0.85, green: 0.25, blue: 0.0)
+                : Color(red: 0.75, green: 0.20, blue: 0.0)
+        case "local":
+            secondaryColor = scheme == .dark
+                ? Color(red: 0.20, green: 0.58, blue: 0.44)
+                : Color(red: 0.12, green: 0.44, blue: 0.30)
         case "deepseek":
             secondaryColor = scheme == .dark
                 ? Color(red: 0.22, green: 0.28, blue: 0.85)
@@ -719,12 +748,14 @@ enum ProviderVisualIdentityLookup {
         case "gemini": return "GeminiIcon"
         case "copilot": return "CopilotIcon"
         case "antigravity": return "AntigravityIcon"
-        case "zai": return "ZaiIcon"
+        case "glm", "zai": return "ZaiIcon"
         case "bedrock": return "BedrockIcon"
         case "ampcode": return "AmpCodeIcon"
         case "kimi": return "KimiIcon"
         case "kiro": return "KiroIcon"
         case "minimax": return "MiniMaxIcon"
+        case "qwen", "alibaba": return "AlibabaIcon"
+        case "local": return "QuestionIcon"
         case "deepseek": return "DeepSeekIcon"
         case "cursor": return "CursorIcon"
         case "mistral": return "MistralIcon"
@@ -744,12 +775,16 @@ enum ProviderVisualIdentityLookup {
         case "gemini": return "Gemini"
         case "copilot": return "GitHub Copilot"
         case "antigravity": return "Antigravity"
+        case "glm": return "GLM"
         case "zai": return "Z.ai"
         case "bedrock": return "AWS Bedrock"
         case "ampcode": return "Amp"
         case "kimi": return "Kimi"
         case "kiro": return "Kiro"
         case "minimax": return "MiniMax"
+        case "qwen": return "Qwen"
+        case "alibaba": return "Alibaba"
+        case "local": return "Local"
         case "deepseek": return "DeepSeek"
         case "cursor": return "Cursor"
         case "mistral": return "Mistral"
@@ -769,12 +804,14 @@ enum ProviderVisualIdentityLookup {
         case "gemini": return "sparkles"
         case "copilot": return "chevron.left.forwardslash.chevron.right"
         case "antigravity": return "wand.and.stars"
-        case "zai": return "z.square.fill"
+        case "glm", "zai": return "z.square.fill"
         case "bedrock": return "cloud.fill"
         case "ampcode": return "bolt.fill"
         case "kimi": return "k.square.fill"
         case "kiro": return "wand.and.stars.inverse"
         case "minimax": return "waveform"
+        case "qwen", "alibaba": return "cloud.fill"
+        case "local": return "desktopcomputer"
         case "deepseek": return "d.square.fill"
         case "cursor": return "cursorarrow.rays"
         case "mistral": return "cat.fill"

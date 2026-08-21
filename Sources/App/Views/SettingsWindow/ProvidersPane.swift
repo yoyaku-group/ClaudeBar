@@ -225,33 +225,102 @@ private struct ProviderDetailView: View {
     /// The provider-specific config card, when one exists.
     @ViewBuilder
     private var configCard: some View {
-        switch provider.id {
-        case "claude":
-            ClaudeConfigCard(monitor: monitor)
-        case "codex":
-            CodexConfigCard(monitor: monitor)
-        case "kimi":
-            KimiConfigCard(monitor: monitor)
-        case "minimax":
-            MiniMaxConfigCard(monitor: monitor)
-        case "deepseek":
-            DeepSeekConfigCard(monitor: monitor)
-        case "alibaba":
-            AlibabaConfigCard(monitor: monitor)
-        case "vercel-gateway":
-            VercelConfigCard(monitor: monitor)
-        case "copilot":
-            CopilotConfigCard(monitor: monitor)
-        case "zai":
-            ZaiConfigCard(monitor: monitor)
-        case "bedrock":
-            BedrockConfigCard(monitor: monitor)
-        default:
-            if let extProvider = provider as? ExtensionProvider, extProvider.manifest.hasConfig {
-                ExtensionConfigCard(
-                    provider: extProvider,
-                    configRepository: AppSettings.shared.extensionConfig
-                )
+        if let routerProvider = provider as? RouterBackedProvider {
+            RouterProviderConfigCard(provider: routerProvider)
+        } else {
+            switch provider.id {
+            case "claude":
+                ClaudeConfigCard(monitor: monitor)
+            case "codex":
+                CodexConfigCard(monitor: monitor)
+            case "kimi":
+                KimiConfigCard(monitor: monitor)
+            case "minimax":
+                MiniMaxConfigCard(monitor: monitor)
+            case "deepseek":
+                DeepSeekConfigCard(monitor: monitor)
+            case "alibaba":
+                AlibabaConfigCard(monitor: monitor)
+            case "vercel-gateway":
+                VercelConfigCard(monitor: monitor)
+            case "copilot":
+                CopilotConfigCard(monitor: monitor)
+            case "zai":
+                ZaiConfigCard(monitor: monitor)
+            case "bedrock":
+                BedrockConfigCard(monitor: monitor)
+            default:
+                if let extProvider = provider as? ExtensionProvider, extProvider.manifest.hasConfig {
+                    ExtensionConfigCard(
+                        provider: extProvider,
+                        configRepository: AppSettings.shared.extensionConfig
+                    )
+                }
+            }
+        }
+    }
+}
+
+/// Read-only status for quota identities owned by llm-router. Credential and
+/// roster mutations happen in their canonical CLIs; ClaudeBar is a consumer.
+private struct RouterProviderConfigCard: View {
+    let provider: RouterBackedProvider
+
+    @Environment(\.appTheme) private var theme
+
+    var body: some View {
+        SettingsCard {
+            VStack(alignment: .leading, spacing: 12) {
+                SettingsFieldLabel(text: "LLM-ROUTER QUOTA SOURCE")
+
+                HStack {
+                    Image(systemName: "point.3.connected.trianglepath.dotted")
+                        .foregroundStyle(theme.accentPrimary)
+                    Text(provider.routerProviderId)
+                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(theme.textPrimary)
+                    Spacer()
+                    Text("Read only")
+                        .font(.system(size: 10, weight: .semibold, design: theme.fontDesign))
+                        .foregroundStyle(theme.textTertiary)
+                }
+
+                if provider.accounts.isEmpty {
+                    Text("Accounts appear after the first validated v2 snapshot.")
+                        .font(.system(size: 11, design: theme.fontDesign))
+                        .foregroundStyle(theme.textTertiary)
+                } else {
+                    ForEach(provider.accounts) { account in
+                        HStack(alignment: .top, spacing: 8) {
+                            Circle()
+                                .fill(provider.accountSnapshots[account.accountId] == nil
+                                    ? theme.statusDepleted
+                                    : theme.statusHealthy)
+                                .frame(width: 7, height: 7)
+                                .padding(.top, 4)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(account.displayName)
+                                    .font(.system(size: 11, weight: .semibold, design: theme.fontDesign))
+                                    .foregroundStyle(theme.textPrimary)
+                                if let email = account.email {
+                                    Text(email)
+                                        .font(.system(size: 10, design: theme.fontDesign))
+                                        .foregroundStyle(theme.textTertiary)
+                                }
+                                if let error = provider.lastGroupErrors[account.accountId] {
+                                    Text(error)
+                                        .font(.system(size: 10, design: theme.fontDesign))
+                                        .foregroundStyle(theme.statusDepleted)
+                                }
+                            }
+                            Spacer()
+                        }
+                    }
+                }
+
+                Text("Manage credentials with the provider CLI; llm-router publishes aliases, freshness, and quota windows to ClaudeBar.")
+                    .font(.system(size: 10, design: theme.fontDesign))
+                    .foregroundStyle(theme.textTertiary)
             }
         }
     }

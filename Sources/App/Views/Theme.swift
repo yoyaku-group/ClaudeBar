@@ -628,7 +628,7 @@ extension AppTheme {
             return scheme == .dark
                 ? Color(red: 0.72, green: 0.35, blue: 0.85)
                 : Color(red: 0.58, green: 0.22, blue: 0.72)
-        case "zai":
+        case "glm", "zai":
             return scheme == .dark
                 ? Color(red: 0.35, green: 0.60, blue: 1.0)
                 : Color(red: 0.23, green: 0.51, blue: 0.96)
@@ -647,11 +647,15 @@ extension AppTheme {
             return scheme == .dark
                 ? Color(red: 0.42, green: 0.52, blue: 1.0)
                 : Color(red: 0.23, green: 0.35, blue: 0.92)
-        case "alibaba":
+        case "qwen", "alibaba":
             // Alibaba Cloud orange
             return scheme == .dark
                 ? Color(red: 1.0, green: 0.47, blue: 0.0)
                 : Color(red: 0.90, green: 0.38, blue: 0.0)
+        case "local":
+            return scheme == .dark
+                ? Color(red: 0.40, green: 0.82, blue: 0.58)
+                : Color(red: 0.20, green: 0.60, blue: 0.38)
         case "opencode-go":
             return scheme == .dark
                 ? Color(red: 0.52, green: 0.36, blue: 1.0)
@@ -698,7 +702,7 @@ extension AppTheme {
             secondaryColor = scheme == .dark
                 ? Color(red: 0.45, green: 0.25, blue: 0.75)
                 : Color(red: 0.35, green: 0.15, blue: 0.65)
-        case "zai":
+        case "glm", "zai":
             secondaryColor = scheme == .dark
                 ? Color(red: 0.30, green: 0.45, blue: 0.85)
                 : Color(red: 0.20, green: 0.35, blue: 0.75)
@@ -717,11 +721,15 @@ extension AppTheme {
             secondaryColor = scheme == .dark
                 ? Color(red: 0.22, green: 0.28, blue: 0.85)
                 : Color(red: 0.15, green: 0.20, blue: 0.75)
-        case "alibaba":
+        case "qwen", "alibaba":
             // Alibaba orange-to-red gradient
             secondaryColor = scheme == .dark
                 ? Color(red: 0.85, green: 0.25, blue: 0.0)
                 : Color(red: 0.75, green: 0.20, blue: 0.0)
+        case "local":
+            secondaryColor = scheme == .dark
+                ? Color(red: 0.20, green: 0.58, blue: 0.44)
+                : Color(red: 0.12, green: 0.44, blue: 0.30)
         case "opencode-go":
             secondaryColor = scheme == .dark
                 ? Color(red: 0.36, green: 0.20, blue: 0.90)
@@ -757,11 +765,12 @@ extension AppTheme {
         case "gemini": return "GeminiIcon"
         case "copilot": return "CopilotIcon"
         case "antigravity": return "AntigravityIcon"
-        case "zai": return "ZaiIcon"
+        case "glm", "zai": return "ZaiIcon"
         case "bedrock": return "BedrockIcon"
         case "minimax": return "MiniMaxIcon"
         case "deepseek": return "DeepSeekIcon"
-        case "alibaba": return "AlibabaIcon"
+        case "qwen", "alibaba": return "AlibabaIcon"
+        case "local": return "QuestionIcon"
         case "opencode-go": return "OpenCodeIcon"
         case "omp": return "OmpIcon"
         case "grok": return "GrokIcon"
@@ -778,11 +787,14 @@ extension AppTheme {
         case "gemini": return "Gemini"
         case "copilot": return "GitHub Copilot"
         case "antigravity": return "Antigravity"
+        case "glm": return "GLM"
         case "zai": return "Z.ai"
         case "bedrock": return "AWS Bedrock"
         case "minimax": return "MiniMax"
         case "deepseek": return "DeepSeek"
+        case "qwen": return "Qwen"
         case "alibaba": return "Alibaba"
+        case "local": return "Local"
         case "opencode-go": return "OpenCode Go"
         case "omp": return "Oh My Pi"
         case "grok": return "Grok"
@@ -964,7 +976,6 @@ extension View {
         modifier(ThemeProvider(themeMode: mode))
     }
 }
-
 
 
 

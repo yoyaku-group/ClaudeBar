@@ -41,6 +41,10 @@ public protocol MultiAccountProvider: AIProvider {
     /// Refreshes all accounts concurrently.
     func refreshAllAccounts() async
 
+    /// Refreshes every account while preserving foreground/background cost
+    /// semantics. Existing multi-account providers inherit the legacy default.
+    func refreshAllAccounts(_ kind: RefreshKind) async
+
     /// Adds a new account configuration for this provider.
     /// - Parameter config: The account configuration to add
     /// - Returns: true if the account was added successfully
@@ -57,6 +61,10 @@ public protocol MultiAccountProvider: AIProvider {
 // MARK: - Default Implementations
 
 public extension MultiAccountProvider {
+    func refreshAllAccounts(_ kind: RefreshKind) async {
+        await refreshAllAccounts()
+    }
+
     /// Default: adding accounts is not supported unless explicitly implemented.
     func addAccount(_ config: ProviderAccountConfig) -> Bool {
         false
