@@ -166,15 +166,22 @@ public final class QuotaMonitor {
         let uniqueProviderIds = providerIds.filter { providerId in
             seen.insert(providerId).inserted
         }
+        // Resolve repository membership on the main actor before entering
+        // child tasks. AIProvider instances are Sendable/MainActor-isolated;
+        // the repository lookup itself is not valid from a task-group closure.
+        let refreshTargets: [(providerId: String, provider: any AIProvider)] = uniqueProviderIds.compactMap { providerId in
+            guard let provider = providers.provider(id: providerId) else { return nil }
+            return (providerId, provider)
+        }
 
         await withTaskGroup(of: Void.self) { group in
-            for providerId in uniqueProviderIds {
+            for target in refreshTargets {
                 group.addTask {
-                    if providerId == allAccountsForProviderId,
-                       let multi = self.providers.provider(id: providerId) as? any MultiAccountProvider {
+                    if target.providerId == allAccountsForProviderId,
+                       let multi = target.provider as? any MultiAccountProvider {
                         await multi.refreshAllAccounts(kind)
                     } else {
-                        await self.refresh(providerId: providerId, kind: kind)
+                        await self.refreshProvider(target.provider, kind: kind)
                     }
                 }
             }
