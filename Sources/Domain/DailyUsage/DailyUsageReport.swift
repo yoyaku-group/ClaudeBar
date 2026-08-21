@@ -120,4 +120,57 @@ public struct DailyUsageReport: Sendable, Equatable {
         guard total > 0 else { return 0 }
         return today.workingTime / total
     }
+
+    // MARK: - Cache Deltas
+
+    /// Cache hit rate change in percentage points (e.g., 0.07 = +7pp)
+    public var cacheHitRateDelta: Double {
+        today.cacheHitRate - previous.cacheHitRate
+    }
+
+    /// Formatted cache hit rate delta (e.g., "+7.0pp", "-3.5pp")
+    public var formattedCacheHitRateDelta: String {
+        let pp = cacheHitRateDelta * 100
+        let sign = pp >= 0 ? "+" : "-"
+        return String(format: "\(sign)%.1fpp", abs(pp))
+    }
+
+    /// Cached savings difference (positive = saved more today)
+    public var savingsDelta: Decimal {
+        today.cachedSavings - previous.cachedSavings
+    }
+
+    /// Formatted cached savings delta (e.g., "+$212.30")
+    public var formattedSavingsDelta: String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = "USD"
+        formatter.locale = Locale(identifier: "en_US")
+        formatter.minimumFractionDigits = 2
+        formatter.maximumFractionDigits = 2
+        let abs = abs(savingsDelta)
+        let formatted = formatter.string(from: abs as NSDecimalNumber) ?? "$\(abs)"
+        let sign = savingsDelta >= 0 ? "+" : "-"
+        return "\(sign)\(formatted)"
+    }
+
+    /// Total cache token difference (creation + read)
+    public var cacheTokenDelta: Int {
+        today.totalCacheTokens - previous.totalCacheTokens
+    }
+
+    /// Formatted cache token delta (e.g., "+17.0M")
+    public var formattedCacheTokenDelta: String {
+        let absDelta = abs(cacheTokenDelta)
+        let sign = cacheTokenDelta >= 0 ? "+" : "-"
+        let formatted: String
+        if absDelta >= 1_000_000 {
+            formatted = String(format: "%.1fM", Double(absDelta) / 1_000_000.0)
+        } else if absDelta >= 1_000 {
+            formatted = String(format: "%.1fK", Double(absDelta) / 1_000.0)
+        } else {
+            formatted = "\(absDelta)"
+        }
+        return "\(sign)\(formatted)"
+    }
 }

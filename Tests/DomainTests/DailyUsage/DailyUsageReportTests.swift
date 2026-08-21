@@ -130,4 +130,60 @@ struct DailyUsageReportTests {
         #expect(report.tokenProgress == 0)
         #expect(report.timeProgress == 0)
     }
+
+    // MARK: - Cache Deltas
+
+    private func makeCacheReport(
+        todayHitRate: Double,
+        prevHitRate: Double,
+        todaySavings: Decimal = 100,
+        prevSavings: Decimal = 50,
+        todayCacheTokens: Int = 0,
+        prevCacheTokens: Int = 0
+    ) -> DailyUsageReport {
+        // Synthesize input/cache_read counts to produce target hit rates
+        // hit = cr / (cr + input) → set input = 1000, cr = 1000 * hit / (1 - hit)
+        func make(input: Int, cacheRead: Int, savings: Decimal, cacheTokens: Int, date: Date) -> DailyUsageStat {
+            DailyUsageStat(
+                date: date,
+                totalCost: 0,
+                totalTokens: input,
+                workingTime: 0,
+                sessionCount: 1,
+                inputTokens: input,
+                outputTokens: 0,
+                cacheCreationTokens: cacheTokens,
+                cacheReadTokens: cacheRead,
+                cachedSavings: savings
+            )
+        }
+        let todayInput = 1000
+        let todayCR = todayHitRate >= 1 ? 1_000_000 : Int(Double(todayInput) * todayHitRate / (1 - todayHitRate))
+        let prevInput = 1000
+        let prevCR = prevHitRate >= 1 ? 1_000_000 : Int(Double(prevInput) * prevHitRate / (1 - prevHitRate))
+        return DailyUsageReport(
+            today: make(input: todayInput, cacheRead: todayCR, savings: todaySavings, cacheTokens: todayCacheTokens, date: Date()),
+            previous: make(input: prevInput, cacheRead: prevCR, savings: prevSavings, cacheTokens: prevCacheTokens, date: Date().addingTimeInterval(-86400))
+        )
+    }
+
+    @Test func `cache hit rate delta computed in percentage points`() {
+        let report = makeCacheReport(todayHitRate: 0.92, prevHitRate: 0.85)
+        #expect(abs(report.cacheHitRateDelta - 0.07) < 0.001)
+    }
+
+    @Test func `formatted cache hit rate delta uses percentage points`() {
+        let report = makeCacheReport(todayHitRate: 0.92, prevHitRate: 0.85)
+        #expect(report.formattedCacheHitRateDelta == "+7.0pp")
+    }
+
+    @Test func `formatted savings delta shows currency`() {
+        let report = makeCacheReport(todayHitRate: 0.5, prevHitRate: 0.5, todaySavings: 412.30, prevSavings: 200)
+        #expect(report.formattedSavingsDelta == "+$212.30")
+    }
+
+    @Test func `formatted cache token delta shows millions`() {
+        let report = makeCacheReport(todayHitRate: 0.5, prevHitRate: 0.5, todayCacheTokens: 37_000_000, prevCacheTokens: 20_000_000)
+        #expect(report.formattedCacheTokenDelta == "+17.0M")
+    }
 }

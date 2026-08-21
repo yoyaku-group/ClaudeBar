@@ -49,6 +49,22 @@ struct ClaudeUsageProbeParsingTests {
     ████████████░░░░░░░░ 60% used
     """
 
+    static let fableQuotaOutput = """
+    Claude Code v2.1.198
+
+    Current session
+    ██████████░░░░░░░░░░ 23% used
+    Resets 1:09am (America/Chicago)
+
+    Current week (all models)
+    ██░░░░░░░░░░░░░░░░░░ 10% used
+    Resets Jul 2 at 4:59am (America/Chicago)
+
+    Current week (Fable)
+    ████░░░░░░░░░░░░░░░░ 17% used
+    Resets Jul 2 at 5:59am (America/Chicago)
+    """
+
     // MARK: - Parsing Percentages
 
     @Test
@@ -89,6 +105,60 @@ struct ClaudeUsageProbeParsingTests {
         let opusQuota = snapshot.quota(for: .modelSpecific("opus"))
         #expect(opusQuota?.percentRemaining == 80)
         #expect(opusQuota?.status == .healthy)
+    }
+
+    @Test
+    func `parses fable weekly quota with its own reset time`() throws {
+        // Given
+        let output = Self.fableQuotaOutput
+
+        // When
+        let snapshot = try simulateParse(text: output)
+
+        // Then - 17% used = 83% remaining, reset from the Fable section (not all-models)
+        let fableQuota = snapshot.quota(for: .modelSpecific("fable"))
+        #expect(fableQuota?.percentRemaining == 83)
+        #expect(fableQuota?.status == .healthy)
+        #expect(fableQuota?.resetText?.contains("5:59am") == true)
+    }
+
+    static let fableQuotaWithoutOwnResetOutput = """
+    Current session
+    ██████████░░░░░░░░░░ 23% used
+    Resets 1:09am (America/Chicago)
+
+    Current week (all models)
+    ██░░░░░░░░░░░░░░░░░░ 10% used
+    Resets Jul 2 at 4:59am (America/Chicago)
+
+    Current week (Fable)
+    ████░░░░░░░░░░░░░░░░ 17% used
+    """
+
+    @Test
+    func `fable quota falls back to weekly reset when its section has none`() throws {
+        // Given
+        let output = Self.fableQuotaWithoutOwnResetOutput
+
+        // When
+        let snapshot = try simulateParse(text: output)
+
+        // Then - inherits the all-models weekly reset
+        let fableQuota = snapshot.quota(for: .modelSpecific("fable"))
+        #expect(fableQuota?.percentRemaining == 83)
+        #expect(fableQuota?.resetText?.contains("4:59am") == true)
+    }
+
+    @Test
+    func `no fable quota when section absent`() throws {
+        // Given
+        let output = Self.sampleClaudeOutput
+
+        // When
+        let snapshot = try simulateParse(text: output)
+
+        // Then
+        #expect(snapshot.quota(for: .modelSpecific("fable")) == nil)
     }
 
     @Test
@@ -292,6 +362,47 @@ struct ClaudeUsageProbeParsingTests {
         // Then — all quotas should have resetsAt populated
         #expect(snapshot.sessionQuota?.resetsAt != nil, "Session resetsAt should be populated for 'Resets 9pm (TZ)' format")
         #expect(snapshot.weeklyQuota?.resetsAt != nil, "Weekly resetsAt should be populated for 'Resets Feb 12 at 4pm (TZ)' format")
+    }
+
+    // MARK: - Reset on Same Line as Percentage (CLI v2.1.109+ format)
+
+    // Real output from Claude CLI where reset text and percentage share the same line
+    // (no separate progress bar line, no separate reset line)
+    static let resetOnSameLineOutput = """
+    Current session
+      Resets 3pm (Europe/Amsterdam)                      27% used
+
+
+      Current week (all models)
+      Resets Apr 16 at 4:59pm (Europe/Amsterdam)         40% used
+
+      Current week (Sonnet only)
+      Resets Apr 17 at 11:59am (Europe/Amsterdam)        0% used
+    """
+
+    @Test
+    func `parses percentages when reset and percent share same line`() throws {
+        // When
+        let snapshot = try simulateParse(text: Self.resetOnSameLineOutput)
+
+        // Then
+        #expect(snapshot.sessionQuota?.percentRemaining == 73) // 27% used = 73% remaining
+        #expect(snapshot.weeklyQuota?.percentRemaining == 60)  // 40% used = 60% remaining
+        #expect(snapshot.quota(for: .modelSpecific("sonnet"))?.percentRemaining == 100) // 0% used
+    }
+
+    @Test
+    func `parses resetsAt when reset and percent share same line`() throws {
+        // When
+        let snapshot = try ClaudeUsageProbe.parse(Self.resetOnSameLineOutput)
+
+        // Then — all quotas should have resetsAt populated (enables pace triangle)
+        #expect(snapshot.sessionQuota?.resetsAt != nil,
+                "Session resetsAt should be populated for 'Resets 3pm (TZ) ... 27% used' format")
+        #expect(snapshot.weeklyQuota?.resetsAt != nil,
+                "Weekly resetsAt should be populated for 'Resets Apr 16 at 4:59pm (TZ) ... 40% used' format")
+        #expect(snapshot.quota(for: .modelSpecific("sonnet"))?.resetsAt != nil,
+                "Sonnet resetsAt should be populated for 'Resets Apr 17 at 11:59am (TZ) ... 0% used' format")
     }
 
     // MARK: - ANSI Code Handling
@@ -502,6 +613,7 @@ struct ClaudeUsageProbeParsingTests {
         #expect(costUsage != nil)
         #expect(costUsage?.totalCost == Decimal(string: "5.41"))
         #expect(costUsage?.budget == Decimal(string: "20.00"))
+        #expect(costUsage?.kind == .extraUsage)
     }
 
     @Test
@@ -600,6 +712,29 @@ struct ClaudeUsageProbeParsingTests {
     Esc to cancel
     """
 
+    // Subscription account that has added Extra Usage credits. The CLI header shows
+    // only "API Usage Billing" (no Pro/Max tier word), but valid quota bars still
+    // appear — there is NO "/usage is only available for subscription plans" error.
+    static let apiUsageBillingWithQuotasOutput = """
+    ▐▛███▜▌   Claude Code v2.1.34
+    ▝▜█████▛▘  Sonnet 4.5 · API Usage Billing · user@example.com
+    ▘▘ ▝▝    ~/Library/Application Support/ClaudeBar/Probe
+
+    ❯ /usage
+    Settings:  Status   Config   Usage  (←/→ or tab to cycle)
+
+
+    Current session
+    ██▌                                                5% used
+    Resets 9pm (Asia/Shanghai)
+
+    Current week (all models)
+    █████████▌                                         19% used
+    Resets Feb 12 at 4pm (Asia/Shanghai)
+
+    Esc to cancel
+    """
+
     // Claude API account (subscription with quotas, different from API Usage Billing)
     static let claudeApiWithQuotasOutput = """
     ▐▛███▜▌   Claude Code v2.1.34
@@ -626,16 +761,42 @@ struct ClaudeUsageProbeParsingTests {
     """
 
     @Test
-    func `detects API Usage Billing account from header`() throws {
-        // Given
+    func `treats API Usage Billing with quotas as subscription account`() throws {
+        // Given — header has "API Usage Billing" but no subscription-only error,
+        // and the output contains real quota bars (subscription with Extra Usage credits).
         let probe = ClaudeUsageProbe()
-        let output = "Sonnet 4.5 · API Usage Billing · dzienisz"
+        let output = Self.apiUsageBillingWithQuotasOutput
 
         // When
         let accountType = probe.detectAccountType(output)
 
+        // Then — must NOT be .claudeApi; quota fallback defaults to .claudeMax
+        #expect(accountType != .claudeApi)
+        #expect(accountType == .claudeMax)
+    }
+
+    @Test
+    func `parses subscription account with API Usage Billing header and Extra Usage credits`() throws {
+        // When
+        let snapshot = try simulateParse(text: Self.apiUsageBillingWithQuotasOutput)
+
+        // Then — quotas parsed; no fall-through to /cost
+        #expect(snapshot.accountTier == .claudeMax)
+        #expect(snapshot.sessionQuota?.percentRemaining == 95) // 5% used → 95% remaining
+        #expect(snapshot.weeklyQuota?.percentRemaining == 81)  // 19% used → 81% remaining
+    }
+
+    @Test
+    func `extractUsageError returns subscriptionRequired for /usage subscription error`() throws {
+        // Given
+        let probe = ClaudeUsageProbe()
+        let output = "/usage is only available for subscription plans."
+
+        // When
+        let error = probe.extractUsageError(output)
+
         // Then
-        #expect(accountType == .claudeApi)
+        #expect(error == .subscriptionRequired)
     }
 
     @Test
@@ -676,9 +837,6 @@ struct ClaudeUsageProbeParsingTests {
         }
     }
 
-    // Note: The "only available for subscription" error check was removed from extractUsageError
-    // because API billing accounts are now detected earlier via detectAccountType() in parseClaudeOutput()
-
     // MARK: - /cost Command Parsing
 
     static let costCommandOutput = """
@@ -705,6 +863,7 @@ struct ClaudeUsageProbeParsingTests {
         #expect(snapshot.costUsage != nil)
         #expect(snapshot.costUsage?.totalCost == Decimal(string: "0.55"))
         #expect(snapshot.costUsage?.budget == nil)
+        #expect(snapshot.costUsage?.kind == .apiCost)
         #expect(snapshot.quotas.isEmpty)
     }
 
@@ -793,6 +952,52 @@ struct ClaudeUsageProbeParsingTests {
 
         // Then - colors are stripped, text is preserved
         #expect(rendered.contains("Green") && rendered.contains("Normal"))
+    }
+
+    @Test
+    func `TerminalRenderer includes content scrolled into scrollback`() throws {
+        // Given - more lines than the terminal is tall (50 rows), so early
+        // lines scroll out of the visible screen into scrollback
+        let renderer = TerminalRenderer()
+        let input = (1...80).map { "line \($0)" }.joined(separator: "\n")
+
+        // When
+        let rendered = renderer.render(input)
+
+        // Then - both the scrolled-off top and the visible bottom survive
+        #expect(rendered.contains("line 1\n"))
+        #expect(rendered.contains("line 80"))
+    }
+
+    @Test
+    func `parses usage sections that scrolled off the visible screen`() throws {
+        // Given - the CLI /usage screen grew past 50 rows (usage-contribution
+        // report), pushing the quota sections above the visible screen
+        let filler = (1...60).map { "contributing insight line \($0)" }.joined(separator: "\n")
+        let output = """
+        Current session
+        ██████████████████████████████▌                    61% used
+        Resets 1:09am (America/Chicago)
+
+        Current week (all models)
+        █████████                                          18% used
+        Resets Jul 2 at 4:59am (America/Chicago)
+
+        Current week (Fable)
+        ████████████████                                   32% used
+        Resets Jul 2 at 5:59am (America/Chicago)
+
+        What's contributing to your limits usage?
+        \(filler)
+        """
+
+        // When
+        let snapshot = try simulateParse(text: output)
+
+        // Then
+        #expect(snapshot.sessionQuota?.percentRemaining == 39)
+        #expect(snapshot.weeklyQuota?.percentRemaining == 82)
+        #expect(snapshot.quota(for: .modelSpecific("fable"))?.percentRemaining == 68)
     }
 
     @Test

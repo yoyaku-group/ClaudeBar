@@ -5,6 +5,7 @@ import Mockable
 @testable import Infrastructure
 
 @Suite("CopilotProvider Tests")
+@MainActor
 struct CopilotProviderTests {
 
     // MARK: - Test Helper
@@ -112,7 +113,7 @@ struct CopilotProviderTests {
     func `copilot provider delegates refresh to probe`() async throws {
         let expectedSnapshot = UsageSnapshot(
             providerId: "copilot",
-            quotas: [UsageQuota(percentRemaining: 95, quotaType: .session, providerId: "copilot", resetText: "100/2000 requests")],
+            quotas: [UsageQuota(percentRemaining: 95, quotaType: .timeLimit("Monthly"), providerId: "copilot", resetText: "100/2000 AI credits")],
             capturedAt: Date()
         )
         let mockProbe = MockUsageProbe()
@@ -132,7 +133,7 @@ struct CopilotProviderTests {
     func `copilot provider stores snapshot after refresh`() async throws {
         let expectedSnapshot = UsageSnapshot(
             providerId: "copilot",
-            quotas: [UsageQuota(percentRemaining: 80, quotaType: .session, providerId: "copilot")],
+            quotas: [UsageQuota(percentRemaining: 80, quotaType: .timeLimit("Monthly"), providerId: "copilot")],
             capturedAt: Date()
         )
         let mockProbe = MockUsageProbe()
@@ -326,7 +327,7 @@ struct CopilotProviderTests {
 
         let billingSnapshot = UsageSnapshot(
             providerId: "copilot",
-            quotas: [UsageQuota(percentRemaining: 80, quotaType: .session, providerId: "copilot", resetText: "10/50 requests")],
+            quotas: [UsageQuota(percentRemaining: 80, quotaType: .timeLimit("Monthly"), providerId: "copilot", resetText: "10/50 AI credits")],
             capturedAt: Date()
         )
         given(billingProbe).probe().willReturn(billingSnapshot)
@@ -342,7 +343,7 @@ struct CopilotProviderTests {
         #expect(copilot.probeMode == .billing)
 
         let snapshot = try await copilot.refresh()
-        #expect(snapshot.quotas.first?.resetText == "10/50 requests")
+        #expect(snapshot.quotas.first?.resetText == "10/50 AI credits")
     }
 
     @Test
@@ -354,7 +355,7 @@ struct CopilotProviderTests {
 
         let internalSnapshot = UsageSnapshot(
             providerId: "copilot",
-            quotas: [UsageQuota(percentRemaining: 99.3, quotaType: .session, providerId: "copilot", resetText: "2/300 requests")],
+            quotas: [UsageQuota(percentRemaining: 99.3, quotaType: .timeLimit("Monthly"), providerId: "copilot", resetText: "2/300 AI credits")],
             capturedAt: Date()
         )
         given(internalProbe).probe().willReturn(internalSnapshot)
@@ -369,7 +370,7 @@ struct CopilotProviderTests {
         #expect(copilot.probeMode == .copilotAPI)
 
         let snapshot = try await copilot.refresh()
-        #expect(snapshot.quotas.first?.resetText == "2/300 requests")
+        #expect(snapshot.quotas.first?.resetText == "2/300 AI credits")
     }
 
     @Test
@@ -380,7 +381,7 @@ struct CopilotProviderTests {
 
         let billingSnapshot = UsageSnapshot(
             providerId: "copilot",
-            quotas: [UsageQuota(percentRemaining: 80, quotaType: .session, providerId: "copilot", resetText: "10/50 requests")],
+            quotas: [UsageQuota(percentRemaining: 80, quotaType: .timeLimit("Monthly"), providerId: "copilot", resetText: "10/50 AI credits")],
             capturedAt: Date()
         )
         given(billingProbe).probe().willReturn(billingSnapshot)
@@ -393,7 +394,7 @@ struct CopilotProviderTests {
         #expect(copilot.probeMode == .copilotAPI)
 
         let snapshot = try await copilot.refresh()
-        #expect(snapshot.quotas.first?.resetText == "10/50 requests")
+        #expect(snapshot.quotas.first?.resetText == "10/50 AI credits")
     }
 
     @Test

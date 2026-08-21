@@ -35,10 +35,68 @@ public final class AppSettings {
 
     // MARK: - Display Settings
 
-    /// Whether to show quota as "remaining" or "used"
+    /// Whether to show quota as remaining, used, or pace-aware.
     public var usageDisplayMode: UsageDisplayMode {
         didSet {
             repository.setUsageDisplayMode(usageDisplayMode.rawValue)
+        }
+    }
+
+    /// Whether the menu bar label should show a selected quota percentage instead of the icon.
+    public var menuBarPercentageEnabled: Bool {
+        didSet {
+            repository.setMenuBarPercentageEnabled(menuBarPercentageEnabled)
+        }
+    }
+
+    /// Whether the menu bar label should show the compact reset duration for the
+    /// selected quota. Independent of `menuBarPercentageEnabled`; both can be on
+    /// simultaneously (in which case they are joined by " · ").
+    public var menuBarDurationEnabled: Bool {
+        didSet {
+            repository.setMenuBarDurationEnabled(menuBarDurationEnabled)
+        }
+    }
+
+    /// Whether a dual-window menu bar label should render as two stacked
+    /// smaller lines (one per quota window) instead of one long "A | B" line,
+    /// roughly halving the menu bar width it occupies. Opt-in, default off;
+    /// has no effect while only a single quota window is shown.
+    public var menuBarStackedEnabled: Bool {
+        didSet {
+            repository.setMenuBarStackedEnabled(menuBarStackedEnabled)
+        }
+    }
+
+    /// Text size for the stacked menu bar lines. Small is the original 9pt
+    /// rendering and the default; Medium (10pt) and Large (11pt) trade some of
+    /// the inter-line breathing room for legibility. Only consulted while
+    /// `menuBarStackedEnabled` is actually rendering two lines.
+    public var menuBarStackedSize: MenuBarStackedSize {
+        didSet {
+            repository.setMenuBarStackedSize(menuBarStackedSize.rawValue)
+        }
+    }
+
+    /// Provider used for the menu bar percentage label.
+    public var menuBarPercentageProviderId: String {
+        didSet {
+            repository.setMenuBarPercentageProviderId(menuBarPercentageProviderId)
+        }
+    }
+
+    /// Quota key used for the menu bar percentage label.
+    public var menuBarPercentageQuotaKey: String {
+        didSet {
+            repository.setMenuBarPercentageQuotaKey(menuBarPercentageQuotaKey)
+        }
+    }
+
+    /// Optional secondary quota key shown alongside the primary in the menu bar
+    /// (e.g. weekly next to session). Empty string means no secondary window.
+    public var menuBarSecondaryQuotaKey: String {
+        didSet {
+            repository.setMenuBarSecondaryQuotaKey(menuBarSecondaryQuotaKey)
         }
     }
 
@@ -71,6 +129,28 @@ public final class AppSettings {
     public var backgroundSyncInterval: TimeInterval {
         didSet {
             repository.setBackgroundSyncInterval(backgroundSyncInterval)
+        }
+    }
+
+    /// The background-refresh cadence (Off / 1 / 5 / 15 min) as a single
+    /// picker-friendly value. Computed over the legacy `backgroundSyncEnabled`
+    /// + `backgroundSyncInterval` pair so `settings.json` stays backward
+    /// compatible — "Off" maps to `backgroundSyncEnabled == false`, the others
+    /// to enabled + 60/300/600/900s. Setting it persists both underlying keys.
+    public var refreshInterval: RefreshInterval {
+        get {
+            RefreshInterval.migrating(
+                enabled: backgroundSyncEnabled,
+                storedSeconds: backgroundSyncInterval
+            )
+        }
+        set {
+            // Set the interval before flipping enabled so anything observing the
+            // change sees the final cadence in a single pass.
+            if let seconds = newValue.seconds {
+                backgroundSyncInterval = TimeInterval(seconds)
+            }
+            backgroundSyncEnabled = newValue.isEnabled
         }
     }
 
@@ -155,6 +235,16 @@ public final class AppSettings {
         self.overviewModeEnabled = repository.overviewModeEnabled()
         self.backgroundSyncEnabled = repository.backgroundSyncEnabled()
         self.backgroundSyncInterval = repository.backgroundSyncInterval()
+        self.menuBarPercentageEnabled = repository.menuBarPercentageEnabled()
+        self.menuBarDurationEnabled = repository.menuBarDurationEnabled()
+        self.menuBarStackedEnabled = repository.menuBarStackedEnabled()
+        // The stored size decodes through the Domain fallback so an unknown
+        // raw value (from a newer build's settings file) renders small
+        // instead of crashing or dropping the label.
+        self.menuBarStackedSize = MenuBarStackedSize(storedRawValue: repository.menuBarStackedSize())
+        self.menuBarPercentageProviderId = repository.menuBarPercentageProviderId()
+        self.menuBarPercentageQuotaKey = repository.menuBarPercentageQuotaKey()
+        self.menuBarSecondaryQuotaKey = repository.menuBarSecondaryQuotaKey()
 
         if let mode = UsageDisplayMode(rawValue: repository.usageDisplayMode()) {
             self.usageDisplayMode = mode
@@ -204,7 +294,9 @@ public final class AppSettings {
     public var zai: ZaiSettingsRepository { repository }
     public var bedrock: BedrockSettingsRepository { repository }
     public var minimax: MiniMaxSettingsRepository { repository }
+    public var deepseek: DeepSeekSettingsRepository { repository }
     public var alibaba: AlibabaSettingsRepository { repository }
+    public var vercel: VercelSettingsRepository { repository }
     public var hook: HookSettingsRepository { repository }
 
     /// Extension config repository for dynamic extension provider settings.

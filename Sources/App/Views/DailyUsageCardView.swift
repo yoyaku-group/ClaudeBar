@@ -44,6 +44,14 @@ struct DailyUsageCardView: View {
                     .foregroundStyle(theme.textTertiary)
             }
 
+            // Optional subtitle (e.g., cache breakdown for tokens card)
+            if let subtitle = subtitleText {
+                Text(subtitle)
+                    .font(.system(size: 9, weight: .medium, design: theme.fontDesign))
+                    .foregroundStyle(theme.textTertiary)
+                    .lineLimit(1)
+            }
+
             // Progress bar
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
@@ -98,8 +106,31 @@ struct DailyUsageCardView: View {
     private var primaryValue: String {
         switch metric {
         case .cost: return report.today.formattedCost
-        case .tokens: return report.today.formattedTokens
+        case .tokens: return report.today.formattedTotalTokensWithCache
         case .workingTime: return report.today.formattedWorkingTime
+        }
+    }
+
+    private var subtitleText: String? {
+        switch metric {
+        case .cost:
+            // Highlight cache savings as a discount line under the cost
+            let savings = report.today.cachedSavings
+            guard savings > 0 else { return nil }
+            let costNum = Double(truncating: report.today.totalCost as NSDecimalNumber)
+            let savingsNum = Double(truncating: savings as NSDecimalNumber)
+            let total = costNum + savingsNum
+            guard total > 0 else { return "Saved \(report.today.formattedSavings)" }
+            let discount = savingsNum / total * 100
+            return "Saved \(report.today.formattedSavings) (\(String(format: "%.0f", discount))%)"
+        case .tokens:
+            // Show cache share as plain "X% from cache"
+            let cacheTotal = report.today.totalCacheTokens
+            guard cacheTotal > 0 else { return nil }
+            let cachePct = Double(cacheTotal) / Double(max(1, report.today.totalTokensWithCache)) * 100
+            return "\(String(format: "%.0f", cachePct))% from cache"
+        case .workingTime:
+            return nil
         }
     }
 

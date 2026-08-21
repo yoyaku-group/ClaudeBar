@@ -224,6 +224,31 @@ struct ClaudeCredentialLoaderTests {
         #expect(reloaded?.oauth.refreshToken == "new-refresh")
     }
 
+    @Test
+    func `keychain save arguments update existing item for account`() {
+        let password = """
+        {
+          "claudeAiOauth": {
+            "accessToken": "refreshed-token"
+          }
+        }
+        """
+
+        let arguments = ClaudeCredentialLoader.keychainSaveArguments(
+            service: "Claude Code-credentials",
+            account: "test-user",
+            password: password
+        )
+
+        #expect(arguments == [
+            "add-generic-password",
+            "-U",
+            "-s", "Claude Code-credentials",
+            "-a", "test-user",
+            "-w", password
+        ])
+    }
+
     // MARK: - Environment Variable Tests
 
     @Test

@@ -6,7 +6,8 @@ import Domain
 /// (including all sub-protocols) + HookSettingsRepository.
 ///
 /// Backed by `JSONSettingsStore` reading/writing `~/.claudebar/settings.json`.
-/// Credentials (tokens, API keys) use UserDefaults for now (Keychain migration later).
+/// Vercel credentials use the injected secure store; legacy provider credentials
+/// remain in UserDefaults pending their own migrations.
 public final class JSONSettingsRepository:
     AppSettingsRepository,
     ZaiSettingsRepository,
@@ -17,6 +18,7 @@ public final class JSONSettingsRepository:
     KimiSettingsRepository,
     MiniMaxSettingsRepository,
     AlibabaSettingsRepository,
+    VercelSettingsRepository,
     HookSettingsRepository,
     @unchecked Sendable
 {
@@ -25,10 +27,25 @@ public final class JSONSettingsRepository:
 
     private let store: JSONSettingsStore
     private let credentials: UserDefaults
+    private let secureCredentials: any CredentialRepository
 
-    public init(store: JSONSettingsStore, credentials: UserDefaults = .standard) {
+    private var vercelCredentials: SecureCredentialMigration {
+        SecureCredentialMigration(
+            secureStore: secureCredentials,
+            legacyStore: credentials,
+            secureKey: CredentialKey.vercelApiKey,
+            legacyKey: Self.legacyVercelApiKeyKey
+        )
+    }
+
+    public init(
+        store: JSONSettingsStore,
+        credentials: UserDefaults = .standard,
+        secureCredentials: any CredentialRepository = KeychainCredentialRepository.shared
+    ) {
         self.store = store
         self.credentials = credentials
+        self.secureCredentials = secureCredentials
     }
 
     // MARK: - AppSettingsRepository
@@ -57,6 +74,62 @@ public final class JSONSettingsRepository:
         store.write(value: mode, key: "app.usageDisplayMode")
     }
 
+    public func menuBarPercentageEnabled() -> Bool {
+        store.read(key: "app.menuBarPercentageEnabled") ?? false
+    }
+
+    public func setMenuBarPercentageEnabled(_ enabled: Bool) {
+        store.write(value: enabled, key: "app.menuBarPercentageEnabled")
+    }
+
+    public func menuBarDurationEnabled() -> Bool {
+        store.read(key: "app.menuBarDurationEnabled") ?? false
+    }
+
+    public func setMenuBarDurationEnabled(_ enabled: Bool) {
+        store.write(value: enabled, key: "app.menuBarDurationEnabled")
+    }
+
+    public func menuBarStackedEnabled() -> Bool {
+        store.read(key: "app.menuBarStackedEnabled") ?? false
+    }
+
+    public func setMenuBarStackedEnabled(_ enabled: Bool) {
+        store.write(value: enabled, key: "app.menuBarStackedEnabled")
+    }
+
+    public func menuBarStackedSize() -> String {
+        store.read(key: "app.menuBarStackedSize") ?? "small"
+    }
+
+    public func setMenuBarStackedSize(_ size: String) {
+        store.write(value: size, key: "app.menuBarStackedSize")
+    }
+
+    public func menuBarPercentageProviderId() -> String {
+        store.read(key: "app.menuBarPercentageProviderId") ?? "claude"
+    }
+
+    public func setMenuBarPercentageProviderId(_ providerId: String) {
+        store.write(value: providerId, key: "app.menuBarPercentageProviderId")
+    }
+
+    public func menuBarPercentageQuotaKey() -> String {
+        store.read(key: "app.menuBarPercentageQuotaKey") ?? "session"
+    }
+
+    public func setMenuBarPercentageQuotaKey(_ quotaKey: String) {
+        store.write(value: quotaKey, key: "app.menuBarPercentageQuotaKey")
+    }
+
+    public func menuBarSecondaryQuotaKey() -> String {
+        store.read(key: "app.menuBarSecondaryQuotaKey") ?? ""
+    }
+
+    public func setMenuBarSecondaryQuotaKey(_ quotaKey: String) {
+        store.write(value: quotaKey, key: "app.menuBarSecondaryQuotaKey")
+    }
+
     public func showDailyUsageCards() -> Bool {
         store.read(key: "app.showDailyUsageCards") ?? true
     }
@@ -82,7 +155,9 @@ public final class JSONSettingsRepository:
     }
 
     public func backgroundSyncInterval() -> TimeInterval {
-        store.read(key: "app.backgroundSyncInterval") ?? 60
+        // Default 10 min (issue #204): a power-conscious cadence for the
+        // background menu-bar refresh when no interval has been persisted yet.
+        store.read(key: "app.backgroundSyncInterval") ?? 600
     }
 
     public func setBackgroundSyncInterval(_ interval: TimeInterval) {
@@ -459,5 +534,64 @@ public final class JSONSettingsRepository:
 
     public func hasMinimaxApiKey() -> Bool {
         getMinimaxApiKey() != nil
+    }
+
+    // MARK: - VercelSettingsRepository
+
+    public func vercelAuthEnvVar() -> String {
+        store.read(key: "vercel.authEnvVar") ?? ""
+    }
+
+    public func setVercelAuthEnvVar(_ envVar: String) {
+        store.write(value: envVar, key: "vercel.authEnvVar")
+    }
+
+    public func saveVercelApiKey(_ key: String) {
+        vercelCredentials.save(key)
+    }
+
+    public func getVercelApiKey() -> String? {
+        vercelCredentials.get()
+    }
+
+    @discardableResult
+    public func deleteVercelApiKey() -> Bool {
+        vercelCredentials.delete()
+    }
+
+    public func hasVercelApiKey() -> Bool {
+        vercelCredentials.exists()
+    }
+
+    private static let legacyVercelApiKeyKey = "com.claudebar.credentials.vercel-api-key"
+}
+
+// MARK: - DeepSeekSettingsRepository
+
+extension JSONSettingsRepository: DeepSeekSettingsRepository {
+    public func deepseekAuthEnvVar() -> String {
+        store.read(key: "deepseek.authEnvVar") ?? ""
+    }
+
+    public func setDeepSeekAuthEnvVar(_ envVar: String) {
+        store.write(value: envVar, key: "deepseek.authEnvVar")
+    }
+
+    // DeepSeek Credentials (UserDefaults for now)
+
+    public func saveDeepSeekApiKey(_ key: String) {
+        credentials.set(key, forKey: "com.claudebar.credentials.deepseek-api-key")
+    }
+
+    public func getDeepSeekApiKey() -> String? {
+        credentials.string(forKey: "com.claudebar.credentials.deepseek-api-key")
+    }
+
+    public func deleteDeepSeekApiKey() {
+        credentials.removeObject(forKey: "com.claudebar.credentials.deepseek-api-key")
+    }
+
+    public func hasDeepSeekApiKey() -> Bool {
+        getDeepSeekApiKey() != nil
     }
 }
