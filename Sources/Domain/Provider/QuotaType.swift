@@ -22,7 +22,58 @@ public enum QuotaType: Sendable, Equatable, Hashable {
         case .modelSpecific(let modelName):
             modelName.capitalized
         case .timeLimit(let name):
-            name.capitalized
+            name
+        }
+    }
+
+    /// Compact label used when several quota windows share the menu bar
+    /// (e.g. "5h" + "7d"). Terser than `displayName` to conserve menu bar width.
+    public var shortLabel: String {
+        switch self {
+        case .session:
+            "5h"
+        case .weekly:
+            "7d"
+        case .modelSpecific(let modelName):
+            modelName.capitalized
+        case .timeLimit(let name):
+            name
+        }
+    }
+
+    /// Stable key used for persisted quota selection.
+    public var quotaKey: String {
+        switch self {
+        case .session:
+            "session"
+        case .weekly:
+            "weekly"
+        case .modelSpecific(let modelName):
+            "model:\(modelName)"
+        case .timeLimit(let name):
+            "time:\(name)"
+        }
+    }
+
+    /// Creates a quota type from a persisted quota key.
+    public init?(quotaKey: String) {
+        switch quotaKey {
+        case "session":
+            self = .session
+        case "weekly":
+            self = .weekly
+        default:
+            if quotaKey.hasPrefix("model:") {
+                let name = String(quotaKey.dropFirst("model:".count))
+                guard !name.isEmpty else { return nil }
+                self = .modelSpecific(name)
+            } else if quotaKey.hasPrefix("time:") {
+                let name = String(quotaKey.dropFirst("time:".count))
+                guard !name.isEmpty else { return nil }
+                self = .timeLimit(name)
+            } else {
+                return nil
+            }
         }
     }
 
@@ -35,6 +86,8 @@ public enum QuotaType: Sendable, Equatable, Hashable {
             .days(7)
         case .modelSpecific:
             .days(7) // Model-specific limits typically follow weekly windows
+        case .timeLimit(let name) where name.localizedCaseInsensitiveCompare("Monthly") == .orderedSame:
+            .days(30)
         case .timeLimit:
             .days(7) // Generic time limits default to weekly
         }

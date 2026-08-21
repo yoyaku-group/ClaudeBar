@@ -61,4 +61,11 @@ enum ModelPricing {
         let cacheReadCost = Decimal(record.cacheReadTokens) / 1_000_000 * p.cacheReadPer1M
         return inputCost + outputCost + cacheWriteCost + cacheReadCost
     }
+
+    /// Estimated savings from cache hits — what cache_read tokens would have cost
+    /// at the full input price minus what they actually cost.
+    static func savings(for record: TokenUsageRecord) -> Decimal {
+        let p = price(for: record.model)
+        return Decimal(record.cacheReadTokens) / 1_000_000 * (p.inputPer1M - p.cacheReadPer1M)
+    }
 }

@@ -21,6 +21,27 @@ public protocol AppSettingsRepository: Sendable {
     func usageDisplayMode() -> String
     func setUsageDisplayMode(_ mode: String)
 
+    func menuBarPercentageEnabled() -> Bool
+    func setMenuBarPercentageEnabled(_ enabled: Bool)
+
+    func menuBarDurationEnabled() -> Bool
+    func setMenuBarDurationEnabled(_ enabled: Bool)
+
+    func menuBarStackedEnabled() -> Bool
+    func setMenuBarStackedEnabled(_ enabled: Bool)
+
+    func menuBarStackedSize() -> String
+    func setMenuBarStackedSize(_ size: String)
+
+    func menuBarPercentageProviderId() -> String
+    func setMenuBarPercentageProviderId(_ providerId: String)
+
+    func menuBarPercentageQuotaKey() -> String
+    func setMenuBarPercentageQuotaKey(_ quotaKey: String)
+
+    func menuBarSecondaryQuotaKey() -> String
+    func setMenuBarSecondaryQuotaKey(_ quotaKey: String)
+
     func showDailyUsageCards() -> Bool
     func setShowDailyUsageCards(_ show: Bool)
 

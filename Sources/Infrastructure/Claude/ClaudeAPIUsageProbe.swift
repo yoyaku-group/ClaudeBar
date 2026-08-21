@@ -1,6 +1,79 @@
 import Foundation
 import Domain
 
+/// Thread-safe TTL cache for a successful `UsageSnapshot`. Quota numbers
+/// move on multi-hour timescales (5h session, 7d weekly), so returning the
+/// most recent successful snapshot for a short window costs nothing in
+/// freshness and dramatically reduces requests against the rate-limited
+/// usage endpoint.
+private final class SnapshotCache: @unchecked Sendable {
+    private var cached: UsageSnapshot?
+    private var cachedAt: Date?
+    private let ttl: TimeInterval
+    private let lock = NSLock()
+
+    /// Creates a snapshot cache with the given maximum lifetime for a cached
+    /// entry. A `ttl` of `0` effectively disables caching (every `get` misses).
+    init(ttl: TimeInterval) {
+        self.ttl = ttl
+    }
+
+    /// Returns the cached snapshot if it was stored within `ttl` of `now`;
+    /// otherwise evicts the stale entry and returns `nil` so the caller knows
+    /// to re-fetch.
+    func get(now: Date = Date()) -> UsageSnapshot? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let cached, let cachedAt else { return nil }
+        // Inclusive comparison so `ttl == 0` is always immediately stale.
+        // With `>`, a 0-TTL cache would still hit within the same instant.
+        if now.timeIntervalSince(cachedAt) >= ttl {
+            self.cached = nil
+            self.cachedAt = nil
+            return nil
+        }
+        return cached
+    }
+
+    /// Stores a fresh snapshot and stamps it with `now`, replacing any prior
+    /// entry. The next `get` call within `ttl` of `now` will hit this entry.
+    func set(_ snapshot: UsageSnapshot, now: Date = Date()) {
+        lock.lock()
+        defer { lock.unlock() }
+        self.cached = snapshot
+        self.cachedAt = now
+    }
+}
+
+/// Thread-safe holder for an active rate-limit window. When the API returns
+/// HTTP 429, the probe stores `retryAt` here so subsequent calls short-circuit
+/// without re-hitting the endpoint until the window has elapsed.
+private final class RateLimitState: @unchecked Sendable {
+    private var retryAt: Date?
+    private let lock = NSLock()
+
+    /// Returns `retryAt` only if it is still in the future; otherwise clears
+    /// it and returns nil so the next probe is allowed through.
+    func activeRetryAt(now: Date = Date()) -> Date? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let retryAt else { return nil }
+        if retryAt <= now {
+            self.retryAt = nil
+            return nil
+        }
+        return retryAt
+    }
+
+    /// Records a new rate-limit window expiring at `retryAt`. Subsequent
+    /// `activeRetryAt` calls return this value until it falls into the past.
+    func set(retryAt: Date) {
+        lock.lock()
+        defer { lock.unlock() }
+        self.retryAt = retryAt
+    }
+}
+
 /// Thread-safe in-memory cache for Claude OAuth credentials with TTL.
 /// Avoids repeated Keychain/CLI lookups on every probe cycle while ensuring
 /// external credential changes (e.g. CLI re-login) are picked up.
@@ -53,6 +126,24 @@ public struct ClaudeAPIUsageProbe: UsageProbe, @unchecked Sendable {
     private let networkClient: any NetworkClient
     private let timeout: TimeInterval
     private let cache = CredentialCache()
+    private let rateLimit = RateLimitState()
+    private let snapshotCache: SnapshotCache
+
+    /// Fallback retry window applied when the API returns 429 without a
+    /// usable `Retry-After` header. Five minutes is conservative enough to
+    /// stop hammering a throttled endpoint while still picking back up
+    /// reasonably quickly once the window opens.
+    static let defaultRetryAfter: TimeInterval = 5 * 60
+
+    /// Default TTL for the in-memory snapshot cache. Anthropic's
+    /// /api/oauth/usage throttle has been observed handing out 1-hour
+    /// Retry-After windows in response to even one call after a quiet
+    /// period (see deferred memory + anthropics/claude-code#30930), so
+    /// we err on the conservative side. 15 minutes drops the 60s monitor
+    /// cadence to ~4 calls/hour — well under any reasonable threshold —
+    /// while still keeping the displayed quotas fresh enough that a user
+    /// glancing at the menu bar isn't looking at hour-old data.
+    public static let defaultSnapshotCacheTTL: TimeInterval = 15 * 60
 
     // API endpoints
     private static let usageURL = URL(string: "https://api.anthropic.com/api/oauth/usage")!
@@ -67,11 +158,13 @@ public struct ClaudeAPIUsageProbe: UsageProbe, @unchecked Sendable {
     public init(
         credentialLoader: ClaudeCredentialLoader = ClaudeCredentialLoader(),
         networkClient: any NetworkClient = URLSession.shared,
-        timeout: TimeInterval = 15
+        timeout: TimeInterval = 15,
+        snapshotCacheTTL: TimeInterval = Self.defaultSnapshotCacheTTL
     ) {
         self.credentialLoader = credentialLoader
         self.networkClient = networkClient
         self.timeout = timeout
+        self.snapshotCache = SnapshotCache(ttl: snapshotCacheTTL)
     }
 
     public func isAvailable() async -> Bool {
@@ -80,6 +173,21 @@ public struct ClaudeAPIUsageProbe: UsageProbe, @unchecked Sendable {
     }
 
     public func probe() async throws -> UsageSnapshot {
+        // Serve a fresh cached snapshot before doing anything else. This is
+        // the dominant code path during normal monitor polling and means
+        // we make ~1 actual HTTP call per cache TTL instead of one per
+        // monitor tick — well under Anthropic's per-token throttle.
+        if let cached = snapshotCache.get() {
+            return cached
+        }
+
+        // Honor an active rate-limit window before doing any work so we stop
+        // hammering the endpoint while Anthropic is throttling us.
+        if let retryAt = rateLimit.activeRetryAt() {
+            AppLog.probes.info("Claude API: Skipping probe — rate-limited until \(retryAt)")
+            throw ProbeError.rateLimited(retryAt: retryAt)
+        }
+
         // Check cache first, fall back to loading from file/keychain
         // Only update cache when loading from file (not from cache hit) to preserve TTL
         // 仅在从文件加载时更新缓存，避免滑动续期导致 TTL 永不过期
@@ -160,7 +268,9 @@ public struct ClaudeAPIUsageProbe: UsageProbe, @unchecked Sendable {
             }
         }
 
-        return parseUsageResponse(usageData, subscriptionType: credentials.oauth.subscriptionType)
+        let snapshot = parseUsageResponse(usageData, subscriptionType: credentials.oauth.subscriptionType)
+        snapshotCache.set(snapshot)
+        return snapshot
     }
 
     // MARK: - Token Refresh
@@ -279,6 +389,14 @@ public struct ClaudeAPIUsageProbe: UsageProbe, @unchecked Sendable {
             break
         case 401, 403:
             throw ProbeError.authenticationRequired
+        case 429:
+            let retryAfter = Self.parseRetryAfter(
+                httpResponse.value(forHTTPHeaderField: "Retry-After")
+            ) ?? Self.defaultRetryAfter
+            let retryAt = Date().addingTimeInterval(retryAfter)
+            rateLimit.set(retryAt: retryAt)
+            AppLog.probes.warning("Claude API: Rate limited (HTTP 429), retrying after \(Int(retryAfter))s")
+            throw ProbeError.rateLimited(retryAt: retryAt)
         default:
             AppLog.probes.error("Claude API: HTTP error \(httpResponse.statusCode)")
             throw ProbeError.executionFailed("HTTP error: \(httpResponse.statusCode)")
@@ -353,21 +471,66 @@ public struct ClaudeAPIUsageProbe: UsageProbe, @unchecked Sendable {
             ))
         }
 
-        // Parse extra usage
-        // API returns used_credits and monthly_limit in cents, convert to dollars
-        var costUsage: CostUsage?
-        if let extra = response.extraUsage, extra.isEnabled == true {
-            if let used = extra.usedCredits {
-                costUsage = CostUsage(
-                    totalCost: Decimal(used) / 100,
-                    budget: extra.monthlyLimit.map { Decimal($0) / 100 },
-                    apiDuration: 0,
-                    providerId: "claude",
-                    capturedAt: Date(),
-                    resetsAt: nil,
-                    resetText: nil
-                )
+        // Parse model-scoped limits from the generic `limits` array (e.g. Fable).
+        // Session/weekly entries there mirror `five_hour`/`seven_day` and are
+        // skipped; a model already covered by a legacy field is not duplicated.
+        // If the legacy `five_hour`/`seven_day` fields ever go null (as
+        // `seven_day_opus`/`seven_day_sonnet` did), extend this loop to the
+        // `session`/`weekly_all` kinds.
+        for entry in response.limits ?? [] {
+            guard entry.kind == "weekly_scoped",
+                  // Key on the first word of the display name ("Fable 5" -> "fable")
+                  // — must stay in sync with the key the CLI probe hardcodes so a
+                  // persisted "model:<name>" menu-bar selection survives switching
+                  // probe modes.
+                  let modelName = entry.scope?.model?.displayName?
+                      .split(separator: " ").first.map({ $0.lowercased() }),
+                  !modelName.isEmpty,
+                  let percent = entry.percent else {
+                continue
             }
+            let quotaType = QuotaType.modelSpecific(modelName)
+            guard !quotas.contains(where: { $0.quotaType == quotaType }) else {
+                continue
+            }
+            let resetsAt = parseISODate(entry.resetsAt)
+            quotas.append(UsageQuota(
+                percentRemaining: 100.0 - percent,
+                quotaType: quotaType,
+                providerId: "claude",
+                resetsAt: resetsAt,
+                resetText: formatResetText(resetsAt)
+            ))
+        }
+
+        // Prefer the current spend payload, then fall back to legacy
+        // extra_usage. A shape with a present-but-invalid cap is dropped
+        // (falls through) rather than reclassified as uncapped.
+        let costUsage: CostUsage?
+        if let pair = response.spend?.costPair {
+            costUsage = CostUsage(
+                totalCost: pair.used,
+                budget: pair.cap,
+                apiDuration: 0,
+                providerId: "claude",
+                kind: .extraUsage,
+                capturedAt: Date(),
+                resetsAt: nil,
+                resetText: nil
+            )
+        } else if let pair = response.extraUsage?.costPair {
+            costUsage = CostUsage(
+                totalCost: pair.used,
+                budget: pair.cap,
+                apiDuration: 0,
+                providerId: "claude",
+                kind: .extraUsage,
+                capturedAt: Date(),
+                resetsAt: nil,
+                resetText: nil
+            )
+        } else {
+            costUsage = nil
         }
 
         // Determine account tier from subscription type
@@ -385,6 +548,30 @@ public struct ClaudeAPIUsageProbe: UsageProbe, @unchecked Sendable {
             accountTier: accountTier,
             costUsage: costUsage
         )
+    }
+
+    /// Parses an HTTP `Retry-After` header value into a duration.
+    /// Per RFC 7231 the value is either a non-negative integer of seconds, or
+    /// an HTTP-date. Returns nil for missing, malformed, or past-dated values
+    /// so the caller can apply its own fallback.
+    static func parseRetryAfter(_ value: String?, now: Date = Date()) -> TimeInterval? {
+        guard let value = value?.trimmingCharacters(in: .whitespaces), !value.isEmpty else {
+            return nil
+        }
+        // Reject 0 — the /api/oauth/usage endpoint has been observed returning
+        // `Retry-After: 0` while continuing to 429, so treating 0 as "retry
+        // immediately" lands us right back in a hammering loop. See
+        // anthropics/claude-code#30930.
+        if let seconds = TimeInterval(value), seconds > 0 {
+            return seconds
+        }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
+        guard let date = formatter.date(from: value) else { return nil }
+        let delta = date.timeIntervalSince(now)
+        return delta > 0 ? delta : nil
     }
 
     private func parseISODate(_ isoString: String?) -> Date? {
@@ -444,6 +631,8 @@ private struct UsageResponse: Decodable {
     let sevenDaySonnet: UsageQuotaData?
     let sevenDayOpus: UsageQuotaData?
     let extraUsage: ExtraUsageData?
+    let spend: SpendData?
+    let limits: [LimitEntry]?
 
     enum CodingKeys: String, CodingKey {
         case fiveHour = "five_hour"
@@ -451,6 +640,37 @@ private struct UsageResponse: Decodable {
         case sevenDaySonnet = "seven_day_sonnet"
         case sevenDayOpus = "seven_day_opus"
         case extraUsage = "extra_usage"
+        case spend
+        case limits
+    }
+}
+
+/// Entry in the newer generic `limits` array. Model-scoped limits (e.g. Fable)
+/// are reported here as `kind: "weekly_scoped"` with the model in `scope`,
+/// instead of dedicated `seven_day_<model>` fields.
+private struct LimitEntry: Decodable {
+    let kind: String?
+    let percent: Double?
+    let resetsAt: String?
+    let scope: LimitScope?
+
+    enum CodingKeys: String, CodingKey {
+        case kind
+        case percent
+        case resetsAt = "resets_at"
+        case scope
+    }
+}
+
+private struct LimitScope: Decodable {
+    let model: LimitScopeModel?
+}
+
+private struct LimitScopeModel: Decodable {
+    let displayName: String?
+
+    enum CodingKeys: String, CodingKey {
+        case displayName = "display_name"
     }
 }
 
@@ -464,15 +684,77 @@ private struct UsageQuotaData: Decodable {
     }
 }
 
+private struct SpendData: Decodable {
+    let used: MoneyData?
+    let limit: MoneyData?
+    let enabled: Bool?
+
+    /// The decoded (used, cap) pair, or `nil` when the shape is disabled or
+    /// invalid. A `nil` cap inside the pair means genuinely uncapped
+    /// (`limit` absent or JSON null). A present-but-invalid `limit` poisons
+    /// the whole shape instead of silently reading as "no monthly cap".
+    var costPair: (used: Decimal, cap: Decimal?)? {
+        guard enabled == true, let used = used?.amount else { return nil }
+        guard let limit else { return (used, nil) }
+        guard let cap = limit.amount else { return nil }
+        return (used, cap)
+    }
+}
+
+private struct MoneyData: Decodable {
+    let amountMinor: Decimal?
+    let currency: String?
+    let exponent: Int?
+
+    /// Negative spend is not a valid payload state; reject the row rather
+    /// than silently flipping the sign.
+    var amount: Decimal? {
+        guard let amountMinor, amountMinor >= 0, let exponent, exponent >= 0 else { return nil }
+        return Decimal(sign: .plus, exponent: -exponent, significand: amountMinor)
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case amountMinor = "amount_minor"
+        case currency
+        case exponent
+    }
+}
+
 private struct ExtraUsageData: Decodable {
     let isEnabled: Bool?
-    let usedCredits: Double?
-    let monthlyLimit: Double?
+    let usedCredits: Decimal?
+    let monthlyLimit: Decimal?
+    let decimalPlaces: Int?
+
+    /// Same cap semantics as `SpendData.costPair`: absent/null limit means
+    /// uncapped; a present-but-invalid limit invalidates the shape.
+    var costPair: (used: Decimal, cap: Decimal?)? {
+        guard isEnabled == true, let used = usedAmount else { return nil }
+        guard monthlyLimit != nil else { return (used, nil) }
+        guard let cap = monthlyLimitAmount else { return nil }
+        return (used, cap)
+    }
+
+    var usedAmount: Decimal? {
+        scaledAmount(usedCredits)
+    }
+
+    var monthlyLimitAmount: Decimal? {
+        scaledAmount(monthlyLimit)
+    }
+
+    private func scaledAmount(_ amount: Decimal?) -> Decimal? {
+        guard let amount, amount >= 0 else { return nil }
+        let places = decimalPlaces ?? 2
+        guard places >= 0 else { return nil }
+        return Decimal(sign: .plus, exponent: -places, significand: amount)
+    }
 
     enum CodingKeys: String, CodingKey {
         case isEnabled = "is_enabled"
         case usedCredits = "used_credits"
         case monthlyLimit = "monthly_limit"
+        case decimalPlaces = "decimal_places"
     }
 }
 

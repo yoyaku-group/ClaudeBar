@@ -6,7 +6,6 @@ on:
   workflow_dispatch:
 
 env:
-  SWIFT_VERSION: "6.2"
   APP_NAME: ClaudeBar
 
 jobs:
@@ -18,10 +17,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Swift
-        uses: SwiftyLab/setup-swift@latest
-        with:
-          swift-version: ${{ env.SWIFT_VERSION }}
+      # Use the Swift toolchain bundled with the runner's Xcode. Tuist macro
+      # prebuilts must match that toolchain.
 
       - name: Install Tuist
         run: brew install tuist

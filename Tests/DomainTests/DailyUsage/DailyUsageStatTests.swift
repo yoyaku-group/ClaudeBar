@@ -93,4 +93,106 @@ struct DailyUsageStatTests {
         )
         #expect(!stat.isEmpty)
     }
+
+    // MARK: - Cache
+
+    @Test func `totalTokensWithCache sums all token types`() {
+        let stat = DailyUsageStat(
+            date: Date(),
+            totalCost: 0,
+            totalTokens: 1_500,
+            workingTime: 0,
+            sessionCount: 0,
+            inputTokens: 1_000,
+            outputTokens: 500,
+            cacheCreationTokens: 2_000,
+            cacheReadTokens: 8_000,
+            cachedSavings: 0
+        )
+        #expect(stat.totalTokensWithCache == 11_500)
+    }
+
+    @Test func `cacheHitRate is cache_read divided by cache_read plus input`() {
+        let stat = DailyUsageStat(
+            date: Date(),
+            totalCost: 0,
+            totalTokens: 1_500,
+            workingTime: 0,
+            sessionCount: 0,
+            inputTokens: 1_000,
+            outputTokens: 500,
+            cacheCreationTokens: 0,
+            cacheReadTokens: 9_000,
+            cachedSavings: 0
+        )
+        // 9000 / (9000 + 1000) = 0.9
+        #expect(stat.cacheHitRate == 0.9)
+    }
+
+    @Test func `cacheHitRate is zero when no input or cache reads`() {
+        let stat = DailyUsageStat.empty(for: Date())
+        #expect(stat.cacheHitRate == 0)
+    }
+
+    @Test func `formattedHitRate displays as percentage`() {
+        let stat = DailyUsageStat(
+            date: Date(),
+            totalCost: 0,
+            totalTokens: 0,
+            workingTime: 0,
+            sessionCount: 0,
+            inputTokens: 1_000,
+            outputTokens: 0,
+            cacheCreationTokens: 0,
+            cacheReadTokens: 9_000,
+            cachedSavings: 0
+        )
+        #expect(stat.formattedHitRate == "90.0%")
+    }
+
+    @Test func `formattedSavings shows USD amount`() {
+        let stat = DailyUsageStat(
+            date: Date(),
+            totalCost: 0,
+            totalTokens: 0,
+            workingTime: 0,
+            sessionCount: 0,
+            inputTokens: 0,
+            outputTokens: 0,
+            cacheCreationTokens: 0,
+            cacheReadTokens: 0,
+            cachedSavings: Decimal(string: "412.30")!
+        )
+        #expect(stat.formattedSavings == "$412.30")
+    }
+
+    @Test func `formattedCacheTokens sums creation and read with M suffix`() {
+        let stat = DailyUsageStat(
+            date: Date(),
+            totalCost: 0,
+            totalTokens: 0,
+            workingTime: 0,
+            sessionCount: 0,
+            inputTokens: 0,
+            outputTokens: 0,
+            cacheCreationTokens: 12_000_000,
+            cacheReadTokens: 25_000_000,
+            cachedSavings: 0
+        )
+        #expect(stat.formattedCacheTokens == "37.0M")
+    }
+
+    @Test func `existing init still works without cache fields`() {
+        let stat = DailyUsageStat(
+            date: Date(),
+            totalCost: 5,
+            totalTokens: 100,
+            workingTime: 60,
+            sessionCount: 1
+        )
+        #expect(stat.cacheReadTokens == 0)
+        #expect(stat.cacheCreationTokens == 0)
+        #expect(stat.cacheHitRate == 0)
+        #expect(stat.cachedSavings == 0)
+    }
 }

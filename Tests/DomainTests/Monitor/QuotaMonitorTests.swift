@@ -5,10 +5,94 @@ import Mockable
 @testable import Infrastructure
 
 @Suite
+@MainActor
 struct QuotaMonitorTests {
     private struct TestClock: Clock {
         func sleep(for duration: Duration) async throws {}
         func sleep(nanoseconds: UInt64) async throws {}
+    }
+
+    /// A clock whose `sleep` suspends until the surrounding task is cancelled,
+    /// rather than waiting real wall-clock time. The monitoring loop runs exactly
+    /// one cycle and then parks here; `stopMonitoring()` (or stream termination)
+    /// cancels the loop's task, resuming this with a `CancellationError` so the
+    /// loop ends at once. Replacing the old real `Task.sleep(60s)` removes the
+    /// timing race that made the continuous-monitoring tests flake under load.
+    private final class SuspendingClock: Clock, @unchecked Sendable {
+        private let lock = NSLock()
+        private var continuation: CheckedContinuation<Void, Error>?
+        private var cancelled = false
+
+        /// Parks the caller on a continuation that only resumes — throwing
+        /// `CancellationError` — once the surrounding task is cancelled, so the
+        /// monitoring loop suspends after one cycle instead of sleeping for real.
+        func sleep(for duration: Duration) async throws {
+            try await withTaskCancellationHandler {
+                try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+                    lock.lock()
+                    if cancelled {
+                        lock.unlock()
+                        cont.resume(throwing: CancellationError())
+                    } else {
+                        continuation = cont
+                        lock.unlock()
+                    }
+                }
+            } onCancel: {
+                lock.lock()
+                cancelled = true
+                let cont = continuation
+                continuation = nil
+                lock.unlock()
+                cont?.resume(throwing: CancellationError())
+            }
+        }
+
+        /// Bridges the legacy nanosecond API onto the cancellation-gated `sleep(for:)`.
+        func sleep(nanoseconds: UInt64) async throws {
+            try await sleep(for: .nanoseconds(Int64(nanoseconds)))
+        }
+    }
+
+    private actor RefreshCounter {
+        private var value = 0
+
+        func increment() -> Int {
+            value += 1
+            return value
+        }
+
+        func count() -> Int {
+            value
+        }
+    }
+
+    private final class CountingUsageProbe: UsageProbe, @unchecked Sendable {
+        let providerId: String
+        let counter = RefreshCounter()
+
+        init(providerId: String) {
+            self.providerId = providerId
+        }
+
+        func probe() async throws -> UsageSnapshot {
+            let count = await counter.increment()
+            return UsageSnapshot(
+                providerId: providerId,
+                quotas: [
+                    UsageQuota(
+                        percentRemaining: Double(100 - count),
+                        quotaType: .session,
+                        providerId: providerId
+                    ),
+                ],
+                capturedAt: Date()
+            )
+        }
+
+        func isAvailable() async -> Bool {
+            true
+        }
     }
 
     private func makeMonitor(
@@ -16,6 +100,13 @@ struct QuotaMonitorTests {
         alerter: (any QuotaAlerter)? = nil
     ) -> QuotaMonitor {
         QuotaMonitor(providers: providers, alerter: alerter, clock: TestClock())
+    }
+
+    private func makeSuspendingMonitor(
+        providers: any AIProviderRepository,
+        alerter: (any QuotaAlerter)? = nil
+    ) -> QuotaMonitor {
+        QuotaMonitor(providers: providers, alerter: alerter, clock: SuspendingClock())
     }
 
 
@@ -54,6 +145,386 @@ struct QuotaMonitorTests {
         #expect(provider.snapshot != nil)
         #expect(provider.snapshot?.quotas.count == 2)
         #expect(provider.snapshot?.quota(for: .session)?.percentRemaining == 65)
+    }
+
+    @Test
+    func `menu bar percentage display uses selected quota and display mode`() async {
+        // Given
+        let settings = makeSettingsRepository()
+        let probe = MockUsageProbe()
+        given(probe).isAvailable().willReturn(true)
+        given(probe).probe().willReturn(UsageSnapshot(
+            providerId: "claude",
+            quotas: [
+                UsageQuota(percentRemaining: 75, quotaType: .session, providerId: "claude"),
+                UsageQuota(percentRemaining: 35, quotaType: .weekly, providerId: "claude"),
+            ],
+            capturedAt: Date()
+        ))
+        let provider = ClaudeProvider(probe: probe, settingsRepository: settings)
+        let monitor = makeMonitor(providers: AIProviders(providers: [provider]))
+
+        // When
+        await monitor.refresh(providerId: "claude")
+        let display = monitor.menuBarPercentageDisplay(
+            providerId: "claude",
+            quotaKey: "weekly",
+            mode: .used
+        )
+
+        // Then
+        #expect(display?.text == "65%")
+        #expect(display?.status == .warning)
+    }
+
+    @Test
+    func `menu bar percentage display falls back when quota data is missing`() {
+        // Given
+        let settings = makeSettingsRepository()
+        let provider = ClaudeProvider(probe: MockUsageProbe(), settingsRepository: settings)
+        let monitor = makeMonitor(providers: AIProviders(providers: [provider]))
+
+        // When
+        let display = monitor.menuBarPercentageDisplay(
+            providerId: "claude",
+            quotaKey: "session",
+            mode: .remaining
+        )
+
+        // Then
+        #expect(display == nil)
+    }
+
+    @Test
+    func `menu bar duration display returns compact reset time for selected quota`() async {
+        // Given - claude session quota with reset ~3h 58m away
+        let settings = makeSettingsRepository()
+        let probe = MockUsageProbe()
+        given(probe).isAvailable().willReturn(true)
+        given(probe).probe().willReturn(UsageSnapshot(
+            providerId: "claude",
+            quotas: [
+                UsageQuota(
+                    percentRemaining: 75,
+                    quotaType: .session,
+                    providerId: "claude",
+                    resetsAt: Date().addingTimeInterval(3.0 * 3600 + 58.0 * 60 + 30)
+                ),
+            ],
+            capturedAt: Date()
+        ))
+        let provider = ClaudeProvider(probe: probe, settingsRepository: settings)
+        let monitor = makeMonitor(providers: AIProviders(providers: [provider]))
+
+        // When
+        await monitor.refresh(providerId: "claude")
+        let display = monitor.menuBarDurationDisplay(
+            providerId: "claude",
+            quotaKey: "session"
+        )
+
+        // Then
+        #expect(display?.text == "3:58")
+        #expect(display?.status == .healthy)
+    }
+
+    @Test
+    func `menu bar duration display is nil when quota data is missing`() {
+        // Given
+        let settings = makeSettingsRepository()
+        let provider = ClaudeProvider(probe: MockUsageProbe(), settingsRepository: settings)
+        let monitor = makeMonitor(providers: AIProviders(providers: [provider]))
+
+        // When
+        let display = monitor.menuBarDurationDisplay(
+            providerId: "claude",
+            quotaKey: "session"
+        )
+
+        // Then
+        #expect(display == nil)
+    }
+
+    // MARK: - Menu Bar Label (single + dual window)
+
+    /// Builds a Claude-only monitor, refreshed once with the given quotas.
+    private func makeRefreshedClaudeMonitor(quotas: [UsageQuota]) async -> QuotaMonitor {
+        let settings = makeSettingsRepository()
+        let probe = MockUsageProbe()
+        given(probe).isAvailable().willReturn(true)
+        given(probe).probe().willReturn(UsageSnapshot(
+            providerId: "claude",
+            quotas: quotas,
+            capturedAt: Date()
+        ))
+        let provider = ClaudeProvider(probe: probe, settingsRepository: settings)
+        let monitor = makeMonitor(providers: AIProviders(providers: [provider]))
+        await monitor.refresh(providerId: "claude")
+        return monitor
+    }
+
+    @Test
+    func `menu bar label shows single window with no prefix when secondary empty`() async {
+        // Given
+        let monitor = await makeRefreshedClaudeMonitor(quotas: [
+            UsageQuota(percentRemaining: 75, quotaType: .session, providerId: "claude"),
+            UsageQuota(percentRemaining: 35, quotaType: .weekly, providerId: "claude"),
+        ])
+
+        // When
+        let label = monitor.menuBarLabel(
+            providerId: "claude",
+            primaryQuotaKey: "session",
+            secondaryQuotaKey: "",
+            showPercentage: true,
+            showDuration: false,
+            mode: .remaining
+        )
+
+        // Then — unchanged single-window output
+        #expect(label?.text == "75%")
+        #expect(label?.status == .healthy)
+    }
+
+    @Test
+    func `menu bar label shows both windows prefixed by short label`() async {
+        // Given — session 75% (healthy), weekly 35% (warning)
+        let monitor = await makeRefreshedClaudeMonitor(quotas: [
+            UsageQuota(percentRemaining: 75, quotaType: .session, providerId: "claude"),
+            UsageQuota(percentRemaining: 35, quotaType: .weekly, providerId: "claude"),
+        ])
+
+        // When
+        let label = monitor.menuBarLabel(
+            providerId: "claude",
+            primaryQuotaKey: "session",
+            secondaryQuotaKey: "weekly",
+            showPercentage: true,
+            showDuration: false,
+            mode: .remaining
+        )
+
+        // Then — both windows, prefixed, worst status (warning) wins
+        #expect(label?.text == "5h 75% | 7d 35%")
+        #expect(label?.status == .warning)
+    }
+
+    @Test
+    func `menu bar label ignores secondary equal to primary`() async {
+        // Given
+        let monitor = await makeRefreshedClaudeMonitor(quotas: [
+            UsageQuota(percentRemaining: 75, quotaType: .session, providerId: "claude"),
+        ])
+
+        // When — secondary same as primary
+        let label = monitor.menuBarLabel(
+            providerId: "claude",
+            primaryQuotaKey: "session",
+            secondaryQuotaKey: "session",
+            showPercentage: true,
+            showDuration: false,
+            mode: .remaining
+        )
+
+        // Then — deduped to a single unprefixed window
+        #expect(label?.text == "75%")
+    }
+
+    @Test
+    func `menu bar label falls back to single window when secondary quota missing`() async {
+        // Given — only session quota present, but weekly requested as secondary
+        let monitor = await makeRefreshedClaudeMonitor(quotas: [
+            UsageQuota(percentRemaining: 75, quotaType: .session, providerId: "claude"),
+        ])
+
+        // When
+        let label = monitor.menuBarLabel(
+            providerId: "claude",
+            primaryQuotaKey: "session",
+            secondaryQuotaKey: "weekly",
+            showPercentage: true,
+            showDuration: false,
+            mode: .remaining
+        )
+
+        // Then — no secondary data, primary shown alone without prefix
+        #expect(label?.text == "75%")
+    }
+
+    @Test
+    func `menu bar label is nil when neither percentage nor duration enabled`() async {
+        // Given
+        let monitor = await makeRefreshedClaudeMonitor(quotas: [
+            UsageQuota(percentRemaining: 75, quotaType: .session, providerId: "claude"),
+            UsageQuota(percentRemaining: 35, quotaType: .weekly, providerId: "claude"),
+        ])
+
+        // When
+        let label = monitor.menuBarLabel(
+            providerId: "claude",
+            primaryQuotaKey: "session",
+            secondaryQuotaKey: "weekly",
+            showPercentage: false,
+            showDuration: false,
+            mode: .remaining
+        )
+
+        // Then
+        #expect(label == nil)
+    }
+
+    @Test
+    func `menu bar label carries a single segment when secondary empty`() async {
+        // Given
+        let monitor = await makeRefreshedClaudeMonitor(quotas: [
+            UsageQuota(percentRemaining: 75, quotaType: .session, providerId: "claude"),
+        ])
+
+        // When
+        let label = monitor.menuBarLabel(
+            providerId: "claude",
+            primaryQuotaKey: "session",
+            secondaryQuotaKey: "",
+            showPercentage: true,
+            showDuration: false,
+            mode: .remaining
+        )
+
+        // Then: one segment mirroring the joined text, so segment-based
+        // renderers read the same source as the single-line label
+        #expect(label?.segments == [
+            MenuBarLabel.Segment(text: "75%", status: .healthy),
+        ])
+    }
+
+    @Test
+    func `menu bar label carries both windows as separate segments`() async {
+        // Given: session 75% (healthy), weekly 35% (warning)
+        let monitor = await makeRefreshedClaudeMonitor(quotas: [
+            UsageQuota(percentRemaining: 75, quotaType: .session, providerId: "claude"),
+            UsageQuota(percentRemaining: 35, quotaType: .weekly, providerId: "claude"),
+        ])
+
+        // When
+        let label = monitor.menuBarLabel(
+            providerId: "claude",
+            primaryQuotaKey: "session",
+            secondaryQuotaKey: "weekly",
+            showPercentage: true,
+            showDuration: false,
+            mode: .remaining
+        )
+
+        // Then: joined text stays byte-identical (it doubles as the tooltip),
+        // while each segment keeps its own prefixed text and per-window status
+        // so a stacked renderer can tint the two lines independently
+        #expect(label?.text == "5h 75% | 7d 35%")
+        #expect(label?.status == .warning)
+        #expect(label?.segments == [
+            MenuBarLabel.Segment(text: "5h 75%", status: .healthy),
+            MenuBarLabel.Segment(text: "7d 35%", status: .warning),
+        ])
+    }
+
+    @Test
+    func `menu bar label prefers the quota's menuBarTitle for window prefixes`() async {
+        // Given: an aggregated quota whose full label carries a long account
+        // discriminator, condensed by the probe into `menuBarTitle`; the
+        // weekly window carries no override
+        let monitor = await makeRefreshedClaudeMonitor(quotas: [
+            UsageQuota(
+                percentRemaining: 69,
+                quotaType: .timeLimit("Claude 7d · jkjk987654321012"),
+                providerId: "claude",
+                menuBarTitle: "Claude 7d · jkjk987…"
+            ),
+            UsageQuota(percentRemaining: 35, quotaType: .weekly, providerId: "claude"),
+        ])
+
+        // When
+        let label = monitor.menuBarLabel(
+            providerId: "claude",
+            primaryQuotaKey: "time:Claude 7d · jkjk987654321012",
+            secondaryQuotaKey: "weekly",
+            showPercentage: true,
+            showDuration: false,
+            mode: .remaining
+        )
+
+        // Then: the condensed title replaces the full label in the joined
+        // text and the segment; windows without an override keep shortLabel
+        #expect(label?.text == "Claude 7d · jkjk987… 69% | 7d 35%")
+        #expect(label?.segments == [
+            MenuBarLabel.Segment(text: "Claude 7d · jkjk987… 69%", status: .healthy),
+            MenuBarLabel.Segment(text: "7d 35%", status: .warning),
+        ])
+    }
+
+    @Test
+    func `menu bar label segments cover the duration-only variant`() async {
+        // Given: session quota with reset ~3h 58m away
+        let monitor = await makeRefreshedClaudeMonitor(quotas: [
+            UsageQuota(
+                percentRemaining: 75,
+                quotaType: .session,
+                providerId: "claude",
+                resetsAt: Date().addingTimeInterval(3.0 * 3600 + 58.0 * 60 + 30)
+            ),
+        ])
+
+        // When: duration only, no percentage
+        let label = monitor.menuBarLabel(
+            providerId: "claude",
+            primaryQuotaKey: "session",
+            secondaryQuotaKey: "",
+            showPercentage: false,
+            showDuration: true,
+            mode: .remaining
+        )
+
+        // Then
+        #expect(label?.text == "3:58")
+        #expect(label?.segments == [
+            MenuBarLabel.Segment(text: "3:58", status: .healthy),
+        ])
+    }
+
+    @Test
+    func `menu bar label segments cover percentage plus duration windows`() async {
+        // Given: both windows carry reset times
+        let monitor = await makeRefreshedClaudeMonitor(quotas: [
+            UsageQuota(
+                percentRemaining: 75,
+                quotaType: .session,
+                providerId: "claude",
+                resetsAt: Date().addingTimeInterval(3.0 * 3600 + 58.0 * 60 + 30)
+            ),
+            UsageQuota(
+                percentRemaining: 35,
+                quotaType: .weekly,
+                providerId: "claude",
+                resetsAt: Date().addingTimeInterval(6.0 * 86400 + 30)
+            ),
+        ])
+
+        // When: percentage and duration together
+        let label = monitor.menuBarLabel(
+            providerId: "claude",
+            primaryQuotaKey: "session",
+            secondaryQuotaKey: "weekly",
+            showPercentage: true,
+            showDuration: true,
+            mode: .remaining
+        )
+
+        // Then: segments carry the full "percentage · duration" window texts,
+        // each with its own per-window status (matching the dual-window test)
+        #expect(label?.text == "5h 75% · 3:58 | 7d 35% · 6d")
+        #expect(label?.status == .warning)
+        #expect(label?.segments == [
+            MenuBarLabel.Segment(text: "5h 75% · 3:58", status: .healthy),
+            MenuBarLabel.Segment(text: "7d 35% · 6d", status: .warning),
+        ])
     }
 
     @Test
@@ -348,6 +819,72 @@ struct QuotaMonitorTests {
     }
 
     @Test
+    func `background monitoring refreshes configured menu bar provider in percentage mode`() async {
+        // Given
+        let settings = makeSettingsRepository()
+        let claudeProbe = CountingUsageProbe(providerId: "claude")
+        let codexProbe = CountingUsageProbe(providerId: "codex")
+        let claudeProvider = ClaudeProvider(probe: claudeProbe, settingsRepository: settings)
+        let codexProvider = CodexProvider(probe: codexProbe, settingsRepository: settings)
+        let monitor = makeSuspendingMonitor(providers: AIProviders(providers: [claudeProvider, codexProvider]))
+
+        // When - App layer passes selected + configured menu bar provider ids in percentage mode.
+        let stream = monitor.startMonitoring(
+            interval: .seconds(60),
+            providerIds: ["claude", "codex"]
+        )
+        for await _ in stream.prefix(1) {}
+        monitor.stopMonitoring()
+
+        // Then
+        #expect(await claudeProbe.counter.count() == 1)
+        #expect(await codexProbe.counter.count() == 1)
+        #expect(claudeProvider.snapshot != nil)
+        #expect(codexProvider.snapshot != nil)
+    }
+
+    @Test
+    func `background monitoring does not duplicate refreshes when selected and menu bar provider match`() async {
+        // Given
+        let settings = makeSettingsRepository()
+        let probe = CountingUsageProbe(providerId: "claude")
+        let provider = ClaudeProvider(probe: probe, settingsRepository: settings)
+        let monitor = makeSuspendingMonitor(providers: AIProviders(providers: [provider]))
+
+        // When
+        let stream = monitor.startMonitoring(
+            interval: .seconds(60),
+            providerIds: ["claude", "claude"]
+        )
+        for await _ in stream.prefix(1) {}
+        monitor.stopMonitoring()
+
+        // Then
+        #expect(await probe.counter.count() == 1)
+    }
+
+    @Test
+    func `background monitoring without provider ids preserves selected provider refresh behaviour`() async {
+        // Given
+        let settings = makeSettingsRepository()
+        let claudeProbe = CountingUsageProbe(providerId: "claude")
+        let codexProbe = CountingUsageProbe(providerId: "codex")
+        let claudeProvider = ClaudeProvider(probe: claudeProbe, settingsRepository: settings)
+        let codexProvider = CodexProvider(probe: codexProbe, settingsRepository: settings)
+        let monitor = makeSuspendingMonitor(providers: AIProviders(providers: [claudeProvider, codexProvider]))
+        monitor.selectProvider(id: "codex")
+
+        // When - icon mode uses the default selected-provider monitoring path.
+        let stream = monitor.startMonitoring(interval: .seconds(60))
+        for await _ in stream.prefix(1) {}
+        monitor.stopMonitoring()
+
+        // Then
+        #expect(await claudeProbe.counter.count() == 0)
+        #expect(await codexProbe.counter.count() == 1)
+    }
+
+    @Test
     func `monitor stops when requested`() async throws {
         // Given
         let settings = makeSettingsRepository()
@@ -372,6 +909,204 @@ struct QuotaMonitorTests {
 
         // Then - Stream should finish quickly after stop
         #expect(eventCount <= 2)
+    }
+
+    /// #182 regression guard: monitoring flips `isMonitoring` on at start and
+    /// off at stop entirely on the main actor (this @MainActor suite would not
+    /// compile otherwise), so observable state is never mutated off-main.
+    @Test
+    func `startMonitoring keeps observable state on the main actor`() async {
+        // Reading and writing isMonitoring here compiles only because both this
+        // suite and QuotaMonitor are @MainActor — the structural guard against
+        // the #182 off-main mutation. The flow asserts the flag flips on, then off.
+        let settings = makeSettingsRepository()
+        let provider = ClaudeProvider(probe: CountingUsageProbe(providerId: "claude"), settingsRepository: settings)
+        let monitor = makeSuspendingMonitor(providers: AIProviders(providers: [provider]))
+
+        let stream = monitor.startMonitoring(interval: .seconds(60))
+        #expect(monitor.isMonitoring == true)
+
+        for await _ in stream.prefix(1) {}
+        monitor.stopMonitoring()
+
+        #expect(monitor.isMonitoring == false)
+    }
+
+    /// Sub-minute and zero intervals clamp up to the 1-minute floor, while
+    /// at- or above-floor intervals pass through unchanged (energy — #67).
+    @Test
+    func `clampedInterval enforces the one minute floor`() {
+        #expect(QuotaMonitor.clampedInterval(.seconds(5)) == .seconds(60))
+        #expect(QuotaMonitor.clampedInterval(.zero) == .seconds(60))
+        #expect(QuotaMonitor.clampedInterval(.seconds(60)) == .seconds(60))
+        #expect(QuotaMonitor.clampedInterval(.seconds(300)) == .seconds(300))
+        #expect(QuotaMonitor.clampedInterval(.seconds(900)) == .seconds(900))
+    }
+
+    /// The background cadence is the requested interval clamped to the 1-minute
+    /// floor, then raised to the slowest provider-imposed floor in the active set
+    /// (Claude API → 15 min — issue #204).
+    @Test
+    func `effectiveInterval clamps then raises to the slowest provider floor`() {
+        // No provider floor → clamped requested.
+        #expect(QuotaMonitor.effectiveInterval(requested: .seconds(600), floors: []) == .seconds(600))
+        #expect(QuotaMonitor.effectiveInterval(requested: .seconds(5), floors: []) == .seconds(60))
+        // A floor below the requested cadence leaves it unchanged.
+        #expect(QuotaMonitor.effectiveInterval(requested: .seconds(600), floors: [.seconds(60)]) == .seconds(600))
+        // The Claude API floor lifts even the 1-minute option to 15 minutes.
+        #expect(QuotaMonitor.effectiveInterval(requested: .seconds(60), floors: [.seconds(900)]) == .seconds(900))
+        #expect(QuotaMonitor.effectiveInterval(requested: .seconds(600), floors: [.seconds(900)]) == .seconds(900))
+        // The slowest floor wins for a mixed set.
+        #expect(QuotaMonitor.effectiveInterval(requested: .seconds(60), floors: [.seconds(300), .seconds(900)]) == .seconds(900))
+    }
+
+    // MARK: - Energy Awareness (issue #204)
+
+    /// A controllable `PowerStateProvider` fake. `waitUntilParked()` lets a test
+    /// deterministically know the monitoring loop has reached the asleep gate
+    /// (and is about to park on the event stream), so a "no refresh while asleep"
+    /// assertion is race-free.
+    private final class FakePowerStateProvider: PowerStateProvider, @unchecked Sendable {
+        private let lock = NSLock()
+        private var asleep: Bool
+        private var battery: Bool
+        private var continuation: AsyncStream<PowerEvent>.Continuation?
+        private var asleepChecks = 0
+        private var awaitingCheck: CheckedContinuation<Void, Never>?
+
+        init(asleep: Bool = false, onBattery: Bool = false) {
+            self.asleep = asleep
+            self.battery = onBattery
+        }
+
+        var isDisplayAsleep: Bool {
+            lock.lock()
+            let value = asleep
+            var signal: CheckedContinuation<Void, Never>?
+            if value {
+                asleepChecks += 1
+                signal = awaitingCheck
+                awaitingCheck = nil
+            }
+            lock.unlock()
+            signal?.resume()
+            return value
+        }
+
+        var isOnBattery: Bool {
+            lock.lock(); defer { lock.unlock() }
+            return battery
+        }
+
+        func events() -> AsyncStream<PowerEvent> {
+            AsyncStream { continuation in
+                self.lock.lock()
+                self.continuation = continuation
+                self.lock.unlock()
+            }
+        }
+
+        /// Resumes once the loop has read `isDisplayAsleep` while asleep.
+        func waitUntilParked() async {
+            await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+                lock.lock()
+                if asleepChecks > 0 {
+                    lock.unlock()
+                    cont.resume()
+                } else {
+                    awaitingCheck = cont
+                    lock.unlock()
+                }
+            }
+        }
+
+        func wake() {
+            lock.lock()
+            asleep = false
+            let cont = continuation
+            lock.unlock()
+            cont?.yield(.didWake)
+        }
+    }
+
+    /// A clock that records each requested sleep duration, then ends the loop by
+    /// throwing — so a single monitoring tick runs deterministically and the
+    /// recorded cadence can be asserted.
+    private final class RecordingClock: Clock, @unchecked Sendable {
+        private let lock = NSLock()
+        private var _durations: [Duration] = []
+
+        var durations: [Duration] { lock.withLock { _durations } }
+
+        func sleep(for duration: Duration) async throws {
+            lock.withLock { _durations.append(duration) }
+            throw CancellationError()
+        }
+
+        func sleep(nanoseconds: UInt64) async throws {
+            try await sleep(for: .nanoseconds(Int64(nanoseconds)))
+        }
+    }
+
+    @Test
+    func `background loop pauses while display asleep and refreshes on wake`() async {
+        let settings = makeSettingsRepository()
+        let probe = CountingUsageProbe(providerId: "claude")
+        let provider = ClaudeProvider(probe: probe, settingsRepository: settings)
+        let power = FakePowerStateProvider(asleep: true)
+        let monitor = QuotaMonitor(
+            providers: AIProviders(providers: [provider]),
+            clock: RecordingClock(),
+            powerStateProvider: power
+        )
+
+        let stream = monitor.startMonitoring(interval: .seconds(60))
+
+        // The loop reaches the asleep gate and parks — no refresh while asleep.
+        await power.waitUntilParked()
+        #expect(await probe.counter.count() == 0)
+
+        // Waking lets exactly one refresh through, then the clock ends the loop.
+        power.wake()
+        for await _ in stream {}
+        #expect(await probe.counter.count() == 1)
+    }
+
+    @Test
+    func `background loop doubles the cadence while on battery`() async {
+        let settings = makeSettingsRepository()
+        let provider = ClaudeProvider(probe: CountingUsageProbe(providerId: "claude"), settingsRepository: settings)
+        let power = FakePowerStateProvider(asleep: false, onBattery: true)
+        let clock = RecordingClock()
+        let monitor = QuotaMonitor(
+            providers: AIProviders(providers: [provider]),
+            clock: clock,
+            powerStateProvider: power
+        )
+
+        let stream = monitor.startMonitoring(interval: .seconds(600))
+        for await _ in stream {}
+
+        // 600s → 1200s on battery (×2); CLI mode adds no provider floor.
+        #expect(clock.durations == [.seconds(1200)])
+    }
+
+    @Test
+    func `background loop keeps the normal cadence on AC power`() async {
+        let settings = makeSettingsRepository()
+        let provider = ClaudeProvider(probe: CountingUsageProbe(providerId: "claude"), settingsRepository: settings)
+        let power = FakePowerStateProvider(asleep: false, onBattery: false)
+        let clock = RecordingClock()
+        let monitor = QuotaMonitor(
+            providers: AIProviders(providers: [provider]),
+            clock: clock,
+            powerStateProvider: power
+        )
+
+        let stream = monitor.startMonitoring(interval: .seconds(600))
+        for await _ in stream {}
+
+        #expect(clock.durations == [.seconds(600)])
     }
 
     // MARK: - Provider Collections

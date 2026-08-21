@@ -251,13 +251,13 @@ struct UsagePaceTests {
     }
 
     @Test
-    func `displayProgressPercent in pace mode returns percentRemaining`() {
+    func `displayProgressPercent in pace mode returns percentUsed`() {
         let quota = UsageQuota(
             percentRemaining: 30,
             quotaType: .session,
             providerId: "claude"
         )
-        #expect(quota.displayProgressPercent(mode: .pace) == 30)
+        #expect(quota.displayProgressPercent(mode: .pace) == 70)
     }
 
     // MARK: - Weekly Quota Pace
