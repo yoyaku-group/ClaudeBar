@@ -20,6 +20,20 @@ public struct GuardianSnapshot: Sendable, Equatable {
     /// (180 s). The reader sets this flag; the domain model just carries it.
     public let isStale: Bool
 
+    public init(
+        status: String,
+        capturedAt: Date,
+        metrics: Metrics,
+        findings: [Finding],
+        isStale: Bool
+    ) {
+        self.status = status
+        self.capturedAt = capturedAt
+        self.metrics = metrics
+        self.findings = findings
+        self.isStale = isStale
+    }
+
     public struct Metrics: Sendable, Equatable, Decodable {
         public let swapUsedPct: Double?
         public let ramFreePct: Double?
