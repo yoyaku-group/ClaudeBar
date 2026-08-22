@@ -1,10 +1,15 @@
 name: Build
 
 on:
-  # PR-only (rules/02): macOS minutes bill at 10x Linux — no double-burn on push.
-  pull_request:
-    branches: [main, develop]
+  # Neutralised 2026-08-22 (Ben): these macOS-26 runs bill at 10x, gate no merge
+  # (0 required check on yoyaku-group/ClaudeBar) and YOYAKU only needs the manual
+  # build-yoyaku.yml. dispatch-only kills the automatic macOS spend (~half the org
+  # Actions bill). Re-enable PR CI on the self-hosted macOS runner (plan Part 3).
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 
 jobs:
