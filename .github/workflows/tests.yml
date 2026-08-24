@@ -14,7 +14,7 @@ concurrency:
 jobs:
   test:
     name: Unit Tests with Coverage
-    runs-on: macos-26
+    runs-on: [self-hosted, macOS, ARM64, macos-selfhosted]
 
     steps:
       - name: Checkout

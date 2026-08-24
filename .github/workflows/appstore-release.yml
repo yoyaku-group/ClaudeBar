@@ -50,7 +50,7 @@ env:
 jobs:
   appstore-release:
     name: Build, Upload & (optionally) Submit
-    runs-on: macos-15
+    runs-on: [self-hosted, macOS, ARM64, macos-selfhosted]
 
     steps:
       - name: Checkout
